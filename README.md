@@ -34,26 +34,19 @@ Implemented in current codebase:
 
 ## Quick Start
 
-1. Install prerequisites for your distro.
+1. Install prerequisites for your distro (Rust toolchain, GTK4/libadwaita dev packages, and optionally Flatpak SDK).
 2. Build and run:
 ```bash
 cargo build
 cargo run
 ```
-3. Open a connection, connect, browse schema, run query.
-
-Detailed step-by-step instructions:
-- [Run & Build Guide](docs/RUN_AND_BUILD_GUIDE.md)
-- [Build Dependencies](docs/BUILD.md)
-- [Verification Checklist](docs/VERIFY_CHECKLIST.md)
+3. Open a connection, connect, browse schema, and run queries.
 
 ## Security Notes
 
 - Passwords are not stored in plaintext in `connections.json`.
-- Primary storage uses system keyring.
-- Fallback uses encrypted format with version + nonce.
-
-See: [Security Notes](docs/SECURITY_NOTES.md)
+- Primary storage uses the system keyring.
+- Fallback storage uses encrypted format with version + nonce.
 
 ## Flatpak
 
