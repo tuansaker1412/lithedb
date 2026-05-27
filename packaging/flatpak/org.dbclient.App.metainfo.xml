@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.dbclient.App</id>
+  <name>DB Client</name>
+  <summary>Native Linux database client</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Native Linux database client MVP built with GTK4 and Rust.</p>
+  </description>
+  <launchable type="desktop-id">org.dbclient.App.desktop</launchable>
+  <categories>
+    <category>Development</category>
+    <category>Database</category>
+  </categories>
+</component>

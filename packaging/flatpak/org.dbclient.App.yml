@@ -1,0 +1,28 @@
+app-id: org.dbclient.App
+runtime: org.gnome.Platform
+runtime-version: '45'
+sdk: org.gnome.Sdk//45
+command: dbclient
+
+finish-args:
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --talk-name=org.freedesktop.secrets
+
+modules:
+  - name: dbclient
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml
+      - cargo build --release --manifest-path Cargo.toml
+      - install -Dm755 target/release/dbclient /app/bin/dbclient
+      - install -Dm644 packaging/flatpak/org.dbclient.App.desktop /app/share/applications/org.dbclient.App.desktop
+      - install -Dm644 packaging/flatpak/org.dbclient.App.metainfo.xml /app/share/metainfo/org.dbclient.App.metainfo.xml
+      - install -Dm644 packaging/flatpak/org.dbclient.App.svg /app/share/icons/hicolor/scalable/apps/org.dbclient.App.svg
+    sources:
+      - type: dir
+        path: ../..
+      - type: file
+        path: cargo-sources.json

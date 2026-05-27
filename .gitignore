@@ -1,0 +1,28 @@
+# Rust build artifacts
+/target/
+
+# Cargo backup files from fmt
+**/*.rs.bk
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and runtime files
+*.log
+*.pid
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# table pro linux docs
+table-pro-linux-docs/
