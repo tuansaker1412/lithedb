@@ -140,6 +140,7 @@ impl MainWindow {
         this.wire_events();
         this.refresh_list();
         this.refresh_query_connections();
+        this.refresh_query_databases();
         this.refresh_schema_tree();
 
         this
@@ -198,6 +199,17 @@ impl MainWindow {
         tab.connect_ctrl_enter(move || this2.run_query());
 
         tabs.push(tab);
+        drop(tabs);
+        let names: Vec<String> = self
+            .state
+            .connections()
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        for tab in self.tabs.lock().expect("state lock poisoned").iter() {
+            tab.set_connections(&names);
+        }
+        self.refresh_query_databases();
     }
 
     fn close_active_query_tab(&self) {
@@ -216,6 +228,36 @@ impl MainWindow {
         for tab in self.tabs.lock().expect("state lock poisoned").iter() {
             tab.set_connections(&names);
         }
+    }
+
+    fn refresh_query_databases(&self) {
+        let current = self.state.current_pool_database().unwrap_or_default();
+        let this2 = self.clone_refs();
+        glib::spawn_future_local(async move {
+            if this2.state.active_connection_id().is_none() {
+                for tab in this2.tabs.lock().expect("state lock poisoned").iter() {
+                    tab.set_databases(&[], None);
+                }
+                return;
+            }
+            match this2.state.list_databases().await {
+                Ok(dbs) => {
+                    let cur_opt = if current.is_empty() {
+                        None
+                    } else {
+                        Some(current.as_str())
+                    };
+                    for tab in this2.tabs.lock().expect("state lock poisoned").iter() {
+                        tab.set_databases(&dbs, cur_opt);
+                    }
+                }
+                Err(_) => {
+                    for tab in this2.tabs.lock().expect("state lock poisoned").iter() {
+                        tab.set_databases(&[], None);
+                    }
+                }
+            }
+        });
     }
 
     fn wire_events(&self) {
@@ -278,6 +320,11 @@ impl MainWindow {
             self.schema_tree.connect_table_activated(move |db, table| {
                 this2.load_table_data(&db, &table);
             });
+        }
+        {
+            let this2 = self.clone_refs();
+            self.schema_tree
+                .connect_database_expanded(move |db| this2.load_tables_for(&db));
         }
 
         // Result grid pagination
@@ -457,6 +504,7 @@ impl MainWindow {
                                 .set_text(&format!("Connected to {}", cfg2.name));
                             this2.refresh_list();
                             this2.refresh_schema_tree();
+                            this2.refresh_query_databases();
                         }
                         Err(e) => {
                             this2
@@ -477,6 +525,7 @@ impl MainWindow {
             this2.status_label.set_text("Disconnected");
             this2.refresh_list();
             this2.refresh_schema_tree();
+            this2.refresh_query_databases();
             this2.result_grid.clear();
         });
     }
@@ -491,7 +540,20 @@ impl MainWindow {
                 glib::spawn_future_local(async move {
                     match this2.state.list_schema().await {
                         Ok(schema) => {
-                            this2.schema_tree.set_schema(&schema);
+                            let browse_all = !matches!(
+                                this2.state.get_connection(&conn_id).map(|c| c.driver),
+                                Some(crate::config::connection::DriverType::SQLite)
+                            ) && this2
+                                .state
+                                .get_connection(&conn_id)
+                                .map(|c| c.database.is_empty())
+                                .unwrap_or(false);
+                            if browse_all {
+                                let dbs: Vec<String> = schema.into_iter().map(|(d, _)| d).collect();
+                                this2.schema_tree.set_databases(&dbs);
+                            } else {
+                                this2.schema_tree.set_schema(&schema);
+                            }
                         }
                         Err(e) => {
                             this2.schema_tree.set_error(&format!("Error: {}", e));
@@ -503,6 +565,24 @@ impl MainWindow {
             self.schema_tree.set_title("Schema");
             self.schema_tree.set_empty();
         }
+    }
+
+    fn load_tables_for(&self, database: &str) {
+        self.schema_tree.set_tables_loading_for(database);
+        let this2 = self.clone_refs();
+        let db = database.to_string();
+        glib::spawn_future_local(async move {
+            match this2.state.list_tables_for(&db).await {
+                Ok(tables) => {
+                    this2.schema_tree.set_tables_for(&db, &tables);
+                }
+                Err(e) => {
+                    this2
+                        .schema_tree
+                        .set_tables_error_for(&db, &format!("Error: {}", e));
+                }
+            }
+        });
     }
 
     fn run_query(&self) {
@@ -534,6 +614,8 @@ impl MainWindow {
                 }
             };
 
+            let target_db = tab.selected_database_name();
+
             tab.set_status("Running query...");
             self.result_grid.set_loading();
 
@@ -550,6 +632,23 @@ impl MainWindow {
                             .result_grid
                             .set_error(&format!("Connection failed: {}", e));
                         return;
+                    }
+                    this2.refresh_query_databases();
+                }
+
+                if let Some(db) = target_db.as_deref() {
+                    if !db.is_empty() && this2.state.current_pool_database().as_deref() != Some(db)
+                    {
+                        if let Err(e) = this2.state.use_database(db).await {
+                            if let Some(tab) = this2.current_query_tab() {
+                                tab.set_status(&format!("Failed to switch database: {}", e));
+                            }
+                            this2
+                                .result_grid
+                                .set_error(&format!("Failed to switch database: {}", e));
+                            return;
+                        }
+                        this2.refresh_query_databases();
                     }
                 }
 
@@ -604,6 +703,18 @@ impl MainWindow {
                     data_state.order_by.clone(),
                 )
             };
+
+            if !db.is_empty() && this2.state.current_pool_database().as_deref() != Some(db.as_str())
+            {
+                if let Err(e) = this2.state.use_database(&db).await {
+                    this2
+                        .result_grid
+                        .set_error(&format!("Failed to switch database: {}", e));
+                    this2.status_label.set_text(&format!("Error: {}", e));
+                    return;
+                }
+                this2.refresh_query_databases();
+            }
 
             match this2
                 .state

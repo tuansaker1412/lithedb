@@ -193,4 +193,134 @@ impl SchemaTree {
 
         self.tree_view.expand_all();
     }
+
+    pub fn set_databases(&self, databases: &[String]) {
+        self.tree_store.clear();
+
+        for db in databases {
+            let db_iter = self.tree_store.append(None);
+            self.tree_store.set(
+                &db_iter,
+                &[
+                    (0, &"folder-symbolic"),
+                    (1, &db.as_str()),
+                    (2, &"database"),
+                    (3, &db.as_str()),
+                ],
+            );
+            let placeholder = self.tree_store.append(Some(&db_iter));
+            self.tree_store.set(
+                &placeholder,
+                &[
+                    (0, &""),
+                    (1, &"Expand to load tables"),
+                    (2, &"placeholder"),
+                    (3, &db.as_str()),
+                ],
+            );
+        }
+    }
+
+    fn find_database_iter(&self, database: &str) -> Option<gtk::TreeIter> {
+        let iter = self.tree_store.iter_first()?;
+        loop {
+            let kind: String = self.tree_store.get(&iter, 2);
+            let owner: String = self.tree_store.get(&iter, 3);
+            if kind == "database" && owner == database {
+                return Some(iter);
+            }
+            if !self.tree_store.iter_next(&iter) {
+                return None;
+            }
+        }
+    }
+
+    fn clear_children(&self, parent: &gtk::TreeIter) {
+        while let Some(child) = self.tree_store.iter_children(Some(parent)) {
+            self.tree_store.remove(&child);
+        }
+    }
+
+    pub fn set_tables_loading_for(&self, database: &str) {
+        if let Some(parent) = self.find_database_iter(database) {
+            self.clear_children(&parent);
+            let iter = self.tree_store.append(Some(&parent));
+            self.tree_store.set(
+                &iter,
+                &[
+                    (0, &"emblem-synchronizing-symbolic"),
+                    (1, &"Loading..."),
+                    (2, &"loading"),
+                    (3, &database),
+                ],
+            );
+        }
+    }
+
+    pub fn set_tables_for(&self, database: &str, tables: &[String]) {
+        if let Some(parent) = self.find_database_iter(database) {
+            self.clear_children(&parent);
+            if tables.is_empty() {
+                let iter = self.tree_store.append(Some(&parent));
+                self.tree_store.set(
+                    &iter,
+                    &[(0, &""), (1, &"(no tables)"), (2, &"empty"), (3, &database)],
+                );
+            } else {
+                for table in tables {
+                    let iter = self.tree_store.append(Some(&parent));
+                    self.tree_store.set(
+                        &iter,
+                        &[
+                            (0, &"view-list-symbolic"),
+                            (1, &table.as_str()),
+                            (2, &"table"),
+                            (3, &database),
+                        ],
+                    );
+                }
+            }
+            let path = self.tree_store.path(&parent);
+            self.tree_view.expand_row(&path, false);
+        }
+    }
+
+    pub fn set_tables_error_for(&self, database: &str, error: &str) {
+        if let Some(parent) = self.find_database_iter(database) {
+            self.clear_children(&parent);
+            let iter = self.tree_store.append(Some(&parent));
+            self.tree_store.set(
+                &iter,
+                &[
+                    (0, &"dialog-error-symbolic"),
+                    (1, &error),
+                    (2, &"error"),
+                    (3, &database),
+                ],
+            );
+        }
+    }
+
+    pub fn connect_database_expanded<F>(&self, f: F)
+    where
+        F: Fn(String) + 'static,
+    {
+        let store = self.tree_store.clone();
+        self.tree_view.connect_row_expanded(move |_, iter, _| {
+            let kind: String = store.get(iter, 2);
+            if kind != "database" {
+                return;
+            }
+            if let Some(child) = store.iter_children(Some(iter)) {
+                let child_kind: String = store.get(&child, 2);
+                if child_kind != "placeholder" {
+                    return;
+                }
+            } else {
+                return;
+            }
+            let database: String = store.get(iter, 3);
+            f(database);
+        });
+    }
 }

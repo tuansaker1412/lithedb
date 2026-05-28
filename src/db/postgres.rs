@@ -11,6 +11,7 @@ use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
 #[derive(Default)]
 pub struct PostgresDriver {
     pool: Arc<Mutex<Option<PgPool>>>,
+    config: Arc<Mutex<Option<ConnectionConfig>>>,
 }
 
 impl PostgresDriver {
@@ -33,6 +34,8 @@ impl PostgresDriver {
         }
         if !config.database.is_empty() {
             opts = opts.database(&config.database);
+        } else {
+            opts = opts.database("postgres");
         }
         opts
     }
@@ -44,6 +47,24 @@ impl PostgresDriver {
     async fn get_pool(&self) -> Result<PgPool, String> {
         let guard = self.pool.lock().await;
         guard.clone().ok_or_else(|| "not connected".to_string())
+    }
+
+    async fn pool_for_database(&self, database: &str) -> Result<PgPool, String> {
+        let cfg = self
+            .config
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| "not connected".to_string())?;
+        let mut opts = Self::connect_options(&cfg);
+        if !database.is_empty() {
+            opts = opts.database(database);
+        }
+        PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(opts)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     fn row_to_strings(row: &sqlx::postgres::PgRow) -> Vec<Option<String>> {
@@ -137,6 +158,7 @@ impl DatabaseDriver for PostgresDriver {
             .await
             .map_err(|e| e.to_string())?;
         *self.pool.lock().await = Some(pool);
+        *self.config.lock().await = Some(config.clone());
         Ok(())
     }
 
@@ -144,6 +166,7 @@ impl DatabaseDriver for PostgresDriver {
         if let Some(pool) = self.pool.lock().await.take() {
             pool.close().await;
         }
+        *self.config.lock().await = None;
     }
 
     async fn list_databases(&self) -> Result<Vec<String>, String> {
@@ -161,14 +184,14 @@ impl DatabaseDriver for PostgresDriver {
     }
 
     async fn list_tables(&self, database: &str) -> Result<Vec<String>, String> {
-        let pool = self.get_pool().await?;
+        let pool = self.pool_for_database(database).await?;
         let rows = sqlx::query(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_catalog=$1 ORDER BY table_name",
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name",
         )
-        .bind(database)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
+        pool.close().await;
 
         Ok(rows
             .iter()
@@ -303,6 +326,31 @@ impl DatabaseDriver for PostgresDriver {
         );
 
         self.execute_query(&sql).await
+    }
+
+    async fn use_database(&self, database: &str) -> Result<(), String> {
+        let cfg = {
+            let guard = self.config.lock().await;
+            guard.clone().ok_or_else(|| "not connected".to_string())?
+        };
+        let mut new_cfg = cfg;
+        new_cfg.database = database.to_string();
+        let new_pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect_with(Self::connect_options(&new_cfg))
+            .await
+            .map_err(|e| e.to_string())?;
+        let old = {
+            let mut pool_guard = self.pool.lock().await;
+            let old = pool_guard.take();
+            *pool_guard = Some(new_pool);
+            old
+        };
+        if let Some(p) = old {
+            p.close().await;
+        }
+        *self.config.lock().await = Some(new_cfg);
+        Ok(())
     }
 }
 

@@ -8,9 +8,11 @@ pub struct QueryTab {
     pub root: gtk::Box,
     pub run_button: gtk::Button,
     pub connection_dropdown: gtk::DropDown,
+    pub database_dropdown: gtk::DropDown,
     status_label: gtk::Label,
     buffer: sv::Buffer,
     conn_model: gtk::StringList,
+    db_model: gtk::StringList,
 }
 
 impl QueryTab {
@@ -31,6 +33,8 @@ impl QueryTab {
         let run_button = gtk::Button::with_label("Run (Ctrl+Enter)");
         let conn_model = gtk::StringList::new(&[]);
         let connection_dropdown = gtk::DropDown::builder().model(&conn_model).build();
+        let db_model = gtk::StringList::new(&[]);
+        let database_dropdown = gtk::DropDown::builder().model(&db_model).build();
         let status_label = gtk::Label::builder()
             .label(title)
             .halign(gtk::Align::Start)
@@ -39,6 +43,8 @@ impl QueryTab {
         toolbar.append(&run_button);
         toolbar.append(&gtk::Label::new(Some("Connection")));
         toolbar.append(&connection_dropdown);
+        toolbar.append(&gtk::Label::new(Some("Database")));
+        toolbar.append(&database_dropdown);
         toolbar.append(&status_label);
         root.append(&toolbar);
 
@@ -62,9 +68,11 @@ impl QueryTab {
             root,
             run_button,
             connection_dropdown,
+            database_dropdown,
             status_label,
             buffer,
             conn_model,
+            db_model,
         }
     }
 
@@ -84,6 +92,30 @@ impl QueryTab {
             return None;
         }
         self.conn_model.string(idx).map(|s| s.to_string())
+    }
+
+    pub fn set_databases(&self, names: &[String], current: Option<&str>) {
+        self.db_model.splice(0, self.db_model.n_items(), &[]);
+        for n in names {
+            self.db_model.append(n);
+        }
+        if let Some(cur) = current {
+            if let Some(idx) = names.iter().position(|n| n == cur) {
+                self.database_dropdown.set_selected(idx as u32);
+                return;
+            }
+        }
+        if !names.is_empty() {
+            self.database_dropdown.set_selected(0);
+        }
+    }
+
+    pub fn selected_database_name(&self) -> Option<String> {
+        let idx = self.database_dropdown.selected();
+        if idx == u32::MAX {
+            return None;
+        }
+        self.db_model.string(idx).map(|s| s.to_string())
     }
 
     pub fn sql_text(&self) -> String {

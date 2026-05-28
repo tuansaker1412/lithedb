@@ -224,6 +224,10 @@ impl DatabaseDriver for SqliteDriver {
 
         self.execute_query(&sql).await
     }
+
+    async fn use_database(&self, _database: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

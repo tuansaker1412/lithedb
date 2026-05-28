@@ -34,4 +34,5 @@ pub trait DatabaseDriver: Send + Sync {
         limit: u64,
         order_by: Option<(&str, bool)>,
     ) -> Result<QueryResult, String>;
+    async fn use_database(&self, database: &str) -> Result<(), String>;
 }

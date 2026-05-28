@@ -59,7 +59,10 @@ impl ConnectionDialog {
             .hexpand(true)
             .show_peek_icon(true)
             .build();
-        let database = gtk::Entry::builder().hexpand(true).build();
+        let database = gtk::Entry::builder()
+            .hexpand(true)
+            .placeholder_text("(optional) leave empty to browse all databases")
+            .build();
         let ssl = gtk::Switch::builder().halign(gtk::Align::Start).build();
 
         let driver_model = gtk::StringList::new(&["PostgreSQL", "MySQL", "SQLite"]);

@@ -153,15 +153,68 @@ impl AppState {
         let (driver, config) = self
             .active_driver()
             .ok_or_else(|| "not connected".to_string())?;
+        if matches!(config.driver, crate::config::connection::DriverType::SQLite) {
+            let tables = spawn_tokio(async move { driver.list_tables("main").await })
+                .await
+                .map_err(|e| format!("join error: {e}"))??;
+            return Ok(vec![("main".to_string(), tables)]);
+        }
+
+        if config.database.is_empty() {
+            let dbs = spawn_tokio(async move { driver.list_databases().await })
+                .await
+                .map_err(|e| format!("join error: {e}"))??;
+            return Ok(dbs.into_iter().map(|d| (d, Vec::new())).collect());
+        }
+
         let database = config.database.clone();
         let tables = spawn_tokio(async move { driver.list_tables(&database).await })
             .await
             .map_err(|e| format!("join error: {e}"))??;
-        let label = match config.driver {
-            crate::config::connection::DriverType::SQLite => "main".to_string(),
-            _ => config.database.clone(),
-        };
-        Ok(vec![(label, tables)])
+        Ok(vec![(config.database.clone(), tables)])
+    }
+
+    pub async fn list_tables_for(&self, database: &str) -> Result<Vec<String>, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let database = database.to_string();
+        spawn_tokio(async move { driver.list_tables(&database).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn list_databases(&self) -> Result<Vec<String>, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        spawn_tokio(async move { driver.list_databases().await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn use_database(&self, database: &str) -> Result<(), String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let db_for_task = database.to_string();
+        spawn_tokio(async move { driver.use_database(&db_for_task).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))??;
+        let mut guard = self.inner.lock().expect("state lock poisoned");
+        if let Some(cfg) = guard.active_config.as_mut() {
+            cfg.database = database.to_string();
+        }
+        Ok(())
+    }
+
+    pub fn current_pool_database(&self) -> Option<String> {
+        self.inner
+            .lock()
+            .expect("state lock poisoned")
+            .active_config
+            .as_ref()
+            .map(|c| c.database.clone())
     }
 
     pub async fn execute_query(&self, sql: &str) -> Result<crate::db::driver::QueryResult, String> {

@@ -11,6 +11,7 @@ use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
 #[derive(Default)]
 pub struct MySqlDriver {
     pool: Arc<Mutex<Option<MySqlPool>>>,
+    config: Arc<Mutex<Option<ConnectionConfig>>>,
 }
 
 impl MySqlDriver {
@@ -154,6 +155,7 @@ impl DatabaseDriver for MySqlDriver {
             .await
             .map_err(|e| e.to_string())?;
         *self.pool.lock().await = Some(pool);
+        *self.config.lock().await = Some(config.clone());
         Ok(())
     }
 
@@ -161,6 +163,7 @@ impl DatabaseDriver for MySqlDriver {
         if let Some(pool) = self.pool.lock().await.take() {
             pool.close().await;
         }
+        *self.config.lock().await = None;
     }
 
     async fn list_databases(&self) -> Result<Vec<String>, String> {
@@ -277,6 +280,31 @@ impl DatabaseDriver for MySqlDriver {
         );
 
         self.execute_query(&sql).await
+    }
+
+    async fn use_database(&self, database: &str) -> Result<(), String> {
+        let cfg = {
+            let guard = self.config.lock().await;
+            guard.clone().ok_or_else(|| "not connected".to_string())?
+        };
+        let mut new_cfg = cfg;
+        new_cfg.database = database.to_string();
+        let new_pool = MySqlPoolOptions::new()
+            .max_connections(5)
+            .connect_with(Self::connect_options(&new_cfg))
+            .await
+            .map_err(|e| e.to_string())?;
+        let old = {
+            let mut pool_guard = self.pool.lock().await;
+            let old = pool_guard.take();
+            *pool_guard = Some(new_pool);
+            old
+        };
+        if let Some(p) = old {
+            p.close().await;
+        }
+        *self.config.lock().await = Some(new_cfg);
+        Ok(())
     }
 }
 
