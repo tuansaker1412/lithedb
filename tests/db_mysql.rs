@@ -1,4 +1,4 @@
-use dbclient::db::mysql::MySqlDriver;
+use table_pro_linux::db::mysql::MySqlDriver;
 
 #[tokio::test]
 #[ignore]

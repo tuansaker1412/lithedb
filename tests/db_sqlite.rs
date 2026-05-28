@@ -1,4 +1,4 @@
-use dbclient::db::sqlite::SqliteDriver;
+use table_pro_linux::db::sqlite::SqliteDriver;
 
 #[tokio::test]
 #[ignore]

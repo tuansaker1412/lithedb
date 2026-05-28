@@ -53,14 +53,14 @@ impl ConnectionDialog {
         let driver_model = gtk::StringList::new(&["PostgreSQL", "MySQL", "SQLite"]);
         let driver = gtk::DropDown::builder().model(&driver_model).build();
 
-        let add_row = |grid: &gtk::Grid, row: i32, label: &str, widget: &impl IsA<gtk::Widget>| {
+        fn add_row(grid: &gtk::Grid, row: i32, label: &str, widget: &impl IsA<gtk::Widget>) {
             let l = gtk::Label::builder()
                 .label(label)
                 .halign(gtk::Align::Start)
                 .build();
             grid.attach(&l, 0, row, 1, 1);
             grid.attach(widget, 1, row, 1, 1);
-        };
+        }
 
         add_row(&grid, 0, "Name", &name);
         add_row(&grid, 1, "Driver", &driver);

@@ -36,7 +36,7 @@ pub struct ConnectionStore {
 
 impl ConnectionStore {
     pub fn new() -> io::Result<Self> {
-        let proj = ProjectDirs::from("org", "dbclient", "dbclient")
+        let proj = ProjectDirs::from("org", "tableprolinux", "table-pro-linux")
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "XDG config dir not found"))?;
         let dir = proj.config_dir();
         fs::create_dir_all(dir)?;
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn save_load_round_trip_without_serializing_password() {
-        let tempdir = std::env::temp_dir().join(format!("dbclient-test-{}", std::process::id()));
+        let tempdir = std::env::temp_dir().join(format!("table-pro-linux-test-{}", std::process::id()));
         let _ = fs::create_dir_all(&tempdir);
         let file = tempdir.join("connections.json");
         let store = ConnectionStore::from_path(file.clone());

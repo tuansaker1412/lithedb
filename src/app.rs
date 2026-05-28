@@ -8,7 +8,7 @@ pub fn run() {
     adw::init().expect("failed to initialize libadwaita");
 
     let app = adw::Application::builder()
-        .application_id("org.dbclient.App")
+        .application_id("org.tableprolinux.App")
         .build();
 
     app.connect_activate(|app| {

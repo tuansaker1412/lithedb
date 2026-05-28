@@ -1,11 +1,11 @@
 [package]
-name = "dbclient"
+name = "table-pro-linux"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-gtk4 = "0.8"
-libadwaita = "0.6"
+gtk4 = "0.7"
+libadwaita = { version = "0.5", features = ["v1_2"] }
 sourceview5 = "0.7"
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite"] }

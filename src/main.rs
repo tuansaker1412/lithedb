@@ -1,4 +1,4 @@
 fn main() {
     env_logger::init();
-    dbclient::app::run();
+    table_pro_linux::app::run();
 }

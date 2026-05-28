@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use gtk::glib;
+use gtk::prelude::*;
 use gtk4 as gtk;
 use libadwaita::prelude::*;
 use libadwaita as adw;
@@ -480,19 +481,28 @@ impl MainWindow {
 
         let this = self.clone_refs();
         glib::spawn_future_local(async move {
-            let driver = DriverRegistry::create(&conn.driver);
-            let conn_id = conn.id.clone();
-            let result = driver.test_connection(&conn).await;
-            match result {
-                Ok(_) => {
-                    this.state.set_active_connection(Some(conn_id));
-                    this.refresh_list();
-                    this.refresh_query_connections();
-                    this.refresh_schema_tree();
-                    this.toast("Connected");
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(err) => {
+                    let this2 = this.clone_refs();
+                    glib::MainContext::default().invoke_local(move || this2.toast(&format!("Runtime error: {err}")));
+                    return;
                 }
-                Err(err) => this.toast(&format!("Connection failed: {err}")),
-            }
+            };
+
+            let driver = DriverRegistry::create(&conn.driver);
+            let result = rt.block_on(async move { driver.test_connection(&conn).await });
+            let this2 = this.clone_refs();
+            glib::MainContext::default().invoke_local(move || match result {
+                Ok(_) => {
+                    this2.state.set_active_connection(Some(conn.id.clone()));
+                    this2.refresh_list();
+                    this2.refresh_query_connections();
+                    this2.refresh_schema_tree();
+                    this2.toast("Connected");
+                }
+                Err(err) => this2.toast(&format!("Connection failed: {err}")),
+            });
         });
     }
 

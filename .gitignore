@@ -26,3 +26,26 @@ Thumbs.db
 
 # table pro linux docs
 table-pro-linux-docs/
+
+# Flatpak build artifacts
+build-dir/
+.flatpak-builder/
+*.flatpak
+packaging/flatpak/cargo-sources.json
+
+# Rust coverage and profiling
+*.profraw
+*.profdata
+coverage/
+tarpaulin-report.html
+
+# Backup and temporary files
+*.bak
+*.tmp
+*.orig
+
+# Application runtime data
+connections.json
+*.db
+*.sqlite
+*.sqlite3

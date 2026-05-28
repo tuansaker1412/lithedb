@@ -1,5 +1,6 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
+use sourceview5::prelude::*;
 use sourceview5 as sv;
 
 #[derive(Clone)]
@@ -42,7 +43,7 @@ impl QueryTab {
         root.append(&toolbar);
 
         let language = sv::LanguageManager::new().language("sql");
-        let buffer = sv::Buffer::new(language.as_ref());
+        let buffer = sv::Buffer::builder().language(&language.unwrap()).build();
         let view = sv::View::with_buffer(&buffer);
         view.set_show_line_numbers(true);
         view.set_highlight_current_line(true);

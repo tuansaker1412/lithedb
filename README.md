@@ -1,6 +1,6 @@
-# DB Client (Linux Native Database Client)
+# Table Pro Linux
 
-`dbclient` is a native Linux desktop database client built with Rust + GTK4 + libadwaita, inspired by TablePro/TablePlus workflows.
+`table-pro-linux` is a native Linux desktop database client built with Rust + GTK4 + libadwaita, inspired by TablePro/TablePlus workflows.
 
 ## Current MVP Scope
 
@@ -53,7 +53,7 @@ cargo run
 Build and run:
 ```bash
 ./scripts/build-flatpak.sh
-flatpak run org.dbclient.App
+flatpak run org.table-pro-linux.App
 ```
 
 ## Development Status

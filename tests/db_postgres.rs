@@ -1,4 +1,4 @@
-use dbclient::db::postgres::PostgresDriver;
+use table_pro_linux::db::postgres::PostgresDriver;
 
 #[tokio::test]
 #[ignore]

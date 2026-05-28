@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=DB Client
-Exec=dbclient
-Icon=org.dbclient.App
+Name=Table Pro Linux
+Exec=table-pro-linux
+Icon=org.tableprolinux.App
 Type=Application
 Categories=Development;Database;
-StartupWMClass=org.dbclient.App
+StartupWMClass=org.tableprolinux.App
 MimeType=text/plain;text/csv;application/sql;
 Terminal=false

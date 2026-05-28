@@ -190,7 +190,7 @@ impl DatabaseDriver for PostgresDriver {
         limit: u64,
         order_by: Option<(&str, bool)>,
     ) -> Result<QueryResult, String> {
-        let pool = self.get_pool().await?;
+        let _pool = self.get_pool().await?;
         let order_clause = order_by
             .map(|(col, asc)| {
                 format!(
