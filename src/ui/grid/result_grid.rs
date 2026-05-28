@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use gtk::gdk;
 use gtk::prelude::*;
 use gtk4 as gtk;
-use gtk::glib;
 
 use crate::db::driver::QueryResult;
 
@@ -20,7 +19,6 @@ pub struct ResultGrid {
     pub export_csv_button: gtk::Button,
     sort_column_entry: gtk::Entry,
     status_label: gtk::Label,
-    scrolled: gtk::ScrolledWindow,
     content_box: gtk::Box,
     last_result: Arc<Mutex<Option<QueryResult>>>,
     selected_row: Arc<Mutex<Option<usize>>>,
@@ -41,7 +39,7 @@ impl ResultGrid {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
             .build();
-        
+
         let prev_button = gtk::Button::builder()
             .icon_name("go-previous-symbolic")
             .tooltip_text("Previous Page")
@@ -50,7 +48,7 @@ impl ResultGrid {
             .icon_name("go-next-symbolic")
             .tooltip_text("Next Page")
             .build();
-        
+
         let sort_column_entry = gtk::Entry::builder()
             .placeholder_text("Sort column")
             .width_chars(18)
@@ -63,7 +61,7 @@ impl ResultGrid {
             .label("Sort")
             .tooltip_text("Apply Sort")
             .build();
-        
+
         let copy_cell_button = gtk::Button::builder()
             .icon_name("edit-copy-symbolic")
             .tooltip_text("Copy Cell")
@@ -80,13 +78,13 @@ impl ResultGrid {
             .icon_name("document-save-symbolic")
             .tooltip_text("Export as CSV")
             .build();
-        
+
         let status_label = gtk::Label::builder()
             .label("No data")
             .halign(gtk::Align::Start)
             .hexpand(true)
             .build();
-        
+
         toolbar.append(&prev_button);
         toolbar.append(&next_button);
         toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
@@ -106,7 +104,7 @@ impl ResultGrid {
             .hexpand(true)
             .vexpand(true)
             .build();
-        
+
         let content_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
@@ -125,11 +123,21 @@ impl ResultGrid {
             export_csv_button,
             sort_column_entry,
             status_label,
-            scrolled,
             content_box,
             last_result: Arc::new(Mutex::new(None)),
             selected_row: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn clear(&self) {
+        while let Some(child) = self.content_box.first_child() {
+            self.content_box.remove(&child);
+        }
+        *self.last_result.lock().expect("result lock poisoned") = None;
+        *self.selected_row.lock().expect("row lock poisoned") = None;
+        self.status_label.set_text("No data");
+        self.next_button.set_sensitive(false);
+        self.prev_button.set_sensitive(false);
     }
 
     pub fn set_loading(&self) {
@@ -137,7 +145,7 @@ impl ResultGrid {
             self.content_box.remove(&child);
         }
         self.status_label.set_text("Loading table data...");
-        
+
         let spinner_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
@@ -157,7 +165,7 @@ impl ResultGrid {
             self.content_box.remove(&child);
         }
         self.status_label.set_text("Error");
-        
+
         let error_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
@@ -188,6 +196,11 @@ impl ResultGrid {
             self.content_box.remove(&child);
         }
         *self.last_result.lock().expect("result lock poisoned") = Some(result.clone());
+        *self.selected_row.lock().expect("row lock poisoned") = None;
+
+        self.prev_button.set_sensitive(page > 0);
+        self.next_button
+            .set_sensitive(result.rows.len() as u64 >= page_size);
 
         if self.sort_column_entry.text().is_empty() && !result.columns.is_empty() {
             self.sort_column_entry.set_text(&result.columns[0]);
@@ -222,27 +235,32 @@ impl ResultGrid {
                 let cell = gtk::Button::with_label(&txt);
                 cell.set_halign(gtk::Align::Start);
                 cell.set_has_frame(false);
-                
+
                 let selected_row = self.selected_row.clone();
                 cell.connect_clicked(move |_| {
                     *selected_row.lock().expect("row lock poisoned") = Some(r_idx);
                 });
-                
+
                 grid.attach(&cell, c_idx as i32, (r_idx + 1) as i32, 1, 1);
             }
         }
 
         self.content_box.append(&grid);
 
-        let start = page * page_size + 1;
-        let end = page * page_size + result.rows.len() as u64;
-        self.status_label.set_text(&format!(
-            "Showing rows {}-{} | {} rows | {} ms",
-            start,
-            end,
-            result.rows.len(),
-            result.execution_time_ms
-        ));
+        if result.rows.is_empty() {
+            self.status_label
+                .set_text(&format!("No rows | {} ms", result.execution_time_ms));
+        } else {
+            let start = page * page_size + 1;
+            let end = page * page_size + result.rows.len() as u64;
+            self.status_label.set_text(&format!(
+                "Showing rows {}-{} | {} rows | {} ms",
+                start,
+                end,
+                result.rows.len(),
+                result.execution_time_ms
+            ));
+        }
     }
 
     pub fn wire_copy_actions(&self) {
@@ -250,7 +268,12 @@ impl ResultGrid {
             let this = self.clone();
             self.copy_cell_button.connect_clicked(move |_| {
                 if let Some(r_idx) = *this.selected_row.lock().expect("row lock poisoned") {
-                    if let Some(res) = this.last_result.lock().expect("result lock poisoned").clone() {
+                    if let Some(res) = this
+                        .last_result
+                        .lock()
+                        .expect("result lock poisoned")
+                        .clone()
+                    {
                         if let Some(row) = res.rows.get(r_idx) {
                             if let Some(first_val) = row.first() {
                                 let txt = first_val.clone().unwrap_or_else(|| "NULL".to_string());
@@ -266,7 +289,12 @@ impl ResultGrid {
             let this = self.clone();
             self.copy_row_json_button.connect_clicked(move |_| {
                 if let Some(r_idx) = *this.selected_row.lock().expect("row lock poisoned") {
-                    if let Some(res) = this.last_result.lock().expect("result lock poisoned").clone() {
+                    if let Some(res) = this
+                        .last_result
+                        .lock()
+                        .expect("result lock poisoned")
+                        .clone()
+                    {
                         if let Some(row) = res.rows.get(r_idx) {
                             let mut map = serde_json::Map::new();
                             for (idx, col) in res.columns.iter().enumerate() {
@@ -288,7 +316,12 @@ impl ResultGrid {
             let this = self.clone();
             self.copy_row_csv_button.connect_clicked(move |_| {
                 if let Some(r_idx) = *this.selected_row.lock().expect("row lock poisoned") {
-                    if let Some(res) = this.last_result.lock().expect("result lock poisoned").clone() {
+                    if let Some(res) = this
+                        .last_result
+                        .lock()
+                        .expect("result lock poisoned")
+                        .clone()
+                    {
                         if let Some(row) = res.rows.get(r_idx) {
                             let csv = row
                                 .iter()
@@ -317,7 +350,11 @@ impl ResultGrid {
     }
 
     pub fn current_csv(&self) -> Option<String> {
-        let res = self.last_result.lock().expect("result lock poisoned").clone()?;
+        let res = self
+            .last_result
+            .lock()
+            .expect("result lock poisoned")
+            .clone()?;
         let mut out = String::new();
         if !res.columns.is_empty() {
             out.push_str(

@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use sqlx::{mysql::MySqlPoolOptions, Column, MySqlPool, Row};
+use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlSslMode};
+use sqlx::{Column, MySqlPool, Row, TypeInfo};
 use tokio::sync::Mutex;
 
 use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
@@ -17,11 +18,23 @@ impl MySqlDriver {
         Self::default()
     }
 
-    fn conn_str(config: &ConnectionConfig) -> String {
-        format!(
-            "mysql://{}:{}@{}:{}/{}",
-            config.username, config.password, config.host, config.port, config.database
-        )
+    fn connect_options(config: &ConnectionConfig) -> MySqlConnectOptions {
+        let mut opts = MySqlConnectOptions::new()
+            .host(&config.host)
+            .port(config.port)
+            .username(&config.username)
+            .ssl_mode(if config.ssl {
+                MySqlSslMode::Required
+            } else {
+                MySqlSslMode::Disabled
+            });
+        if !config.password.is_empty() {
+            opts = opts.password(&config.password);
+        }
+        if !config.database.is_empty() {
+            opts = opts.database(&config.database);
+        }
+        opts
     }
 
     fn quote_ident(ident: &str) -> String {
@@ -37,15 +50,84 @@ impl MySqlDriver {
         row.columns()
             .iter()
             .enumerate()
-            .map(|(idx, _)| {
-                row.try_get::<Option<String>, _>(idx)
-                    .ok()
-                    .flatten()
-                    .or_else(|| row.try_get::<Option<i64>, _>(idx).ok().flatten().map(|v| v.to_string()))
-                    .or_else(|| row.try_get::<Option<f64>, _>(idx).ok().flatten().map(|v| v.to_string()))
-                    .or_else(|| row.try_get::<Option<bool>, _>(idx).ok().flatten().map(|v| v.to_string()))
-            })
+            .map(|(idx, col)| Self::value_to_string(row, idx, col.type_info().name()))
             .collect()
+    }
+
+    fn value_to_string(row: &sqlx::mysql::MySqlRow, idx: usize, type_name: &str) -> Option<String> {
+        let upper = type_name.to_ascii_uppercase();
+        match upper.as_str() {
+            "BOOLEAN" | "BOOL" | "TINYINT(1)" => row
+                .try_get::<Option<bool>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "TINYINT" => row
+                .try_get::<Option<i8>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "SMALLINT" => row
+                .try_get::<Option<i16>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "MEDIUMINT" | "INT" | "INTEGER" => row
+                .try_get::<Option<i32>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "BIGINT" => row
+                .try_get::<Option<i64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "TINYINT UNSIGNED" => row
+                .try_get::<Option<u8>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "SMALLINT UNSIGNED" => row
+                .try_get::<Option<u16>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "MEDIUMINT UNSIGNED" | "INT UNSIGNED" => row
+                .try_get::<Option<u32>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "BIGINT UNSIGNED" => row
+                .try_get::<Option<u64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "FLOAT" => row
+                .try_get::<Option<f32>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "DOUBLE" => row
+                .try_get::<Option<f64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "VARBINARY" | "BINARY" => row
+                .try_get::<Option<Vec<u8>>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| format!("0x{}", hex::encode(v))),
+            _ => row
+                .try_get::<Option<String>, _>(idx)
+                .ok()
+                .flatten()
+                .or_else(|| {
+                    row.try_get::<Option<i64>, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                }),
+        }
     }
 }
 
@@ -54,7 +136,7 @@ impl DatabaseDriver for MySqlDriver {
     async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), String> {
         let pool = MySqlPoolOptions::new()
             .max_connections(1)
-            .connect(&Self::conn_str(config))
+            .connect_with(Self::connect_options(config))
             .await
             .map_err(|e| e.to_string())?;
         sqlx::query("SELECT 1")
@@ -68,7 +150,7 @@ impl DatabaseDriver for MySqlDriver {
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), String> {
         let pool = MySqlPoolOptions::new()
             .max_connections(5)
-            .connect(&Self::conn_str(config))
+            .connect_with(Self::connect_options(config))
             .await
             .map_err(|e| e.to_string())?;
         *self.pool.lock().await = Some(pool);
@@ -155,7 +237,10 @@ impl DatabaseDriver for MySqlDriver {
                 })
             }
             Err(_) => {
-                let done = sqlx::query(sql).execute(&pool).await.map_err(|e| e.to_string())?;
+                let done = sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok(QueryResult {
                     columns: Vec::new(),
                     rows: Vec::new(),

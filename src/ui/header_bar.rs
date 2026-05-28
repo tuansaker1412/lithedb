@@ -20,7 +20,7 @@ impl AppHeaderBar {
 
         // Right side: Menu button
         let menu = gtk::gio::Menu::new();
-        
+
         let conn_section = gtk::gio::Menu::new();
         conn_section.append(Some("New Connection"), Some("app.new-connection"));
         conn_section.append(Some("Manage Connections"), Some("app.manage-connections"));

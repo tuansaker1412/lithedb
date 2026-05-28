@@ -1,7 +1,7 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
-use sourceview5::prelude::*;
 use sourceview5 as sv;
+use sourceview5::prelude::*;
 
 #[derive(Clone)]
 pub struct QueryTab {
@@ -102,8 +102,7 @@ impl QueryTab {
     {
         let controller = gtk::EventControllerKey::new();
         controller.connect_key_pressed(move |_, key, _, state| {
-            if state.contains(gtk::gdk::ModifierType::CONTROL_MASK)
-                && key == gtk::gdk::Key::Return
+            if state.contains(gtk::gdk::ModifierType::CONTROL_MASK) && key == gtk::gdk::Key::Return
             {
                 f();
                 return true.into();

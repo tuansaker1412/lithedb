@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use crate::config::connection::ConnectionConfig;
+use crate::db::driver::DatabaseDriver;
+use crate::db::registry::DriverRegistry;
+use crate::state::runtime::spawn_tokio;
 
 #[derive(Clone, Default)]
 pub struct AppState {
@@ -11,6 +14,8 @@ pub struct AppState {
 struct AppStateInner {
     connections: Vec<ConnectionConfig>,
     active_connection_id: Option<String>,
+    active_driver: Option<Arc<dyn DatabaseDriver>>,
+    active_config: Option<ConnectionConfig>,
 }
 
 impl AppState {
@@ -19,6 +24,8 @@ impl AppState {
             inner: Arc::new(Mutex::new(AppStateInner {
                 connections,
                 active_connection_id: None,
+                active_driver: None,
+                active_config: None,
             })),
         }
     }
@@ -63,7 +70,10 @@ impl AppState {
     }
 
     pub fn set_active_connection(&self, id: Option<String>) {
-        self.inner.lock().expect("state lock poisoned").active_connection_id = id;
+        self.inner
+            .lock()
+            .expect("state lock poisoned")
+            .active_connection_id = id;
     }
 
     pub fn active_connection_id(&self) -> Option<String> {
@@ -74,47 +84,115 @@ impl AppState {
             .clone()
     }
 
-    pub async fn connect(
-        &self,
-        _config: &ConnectionConfig,
-        _password: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn active_driver(&self) -> Option<(Arc<dyn DatabaseDriver>, ConnectionConfig)> {
+        let guard = self.inner.lock().expect("state lock poisoned");
+        match (guard.active_driver.clone(), guard.active_config.clone()) {
+            (Some(driver), Some(config)) => Some((driver, config)),
+            _ => None,
+        }
+    }
+
+    pub async fn test_connection(config: ConnectionConfig, password: String) -> Result<(), String> {
+        spawn_tokio(async move {
+            let driver = DriverRegistry::create(&config.driver);
+            let mut cfg = config;
+            cfg.password = password;
+            driver.test_connection(&cfg).await
+        })
+        .await
+        .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn connect(&self, config: &ConnectionConfig, password: &str) -> Result<(), String> {
+        let previous = {
+            let mut guard = self.inner.lock().expect("state lock poisoned");
+            let prev = guard.active_driver.take();
+            guard.active_config = None;
+            guard.active_connection_id = None;
+            prev
+        };
+        if let Some(prev) = previous {
+            spawn_tokio(async move { prev.disconnect().await })
+                .await
+                .map_err(|e| format!("join error: {e}"))?;
+        }
+
+        let driver = DriverRegistry::create(&config.driver);
+        let mut connect_cfg = config.clone();
+        connect_cfg.password = password.to_string();
+
+        let driver_for_task = driver.clone();
+        let cfg_for_task = connect_cfg.clone();
+        spawn_tokio(async move { driver_for_task.connect(&cfg_for_task).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))??;
+
+        let mut stored_cfg = connect_cfg;
+        stored_cfg.password = String::new();
+
+        let mut guard = self.inner.lock().expect("state lock poisoned");
+        guard.active_driver = Some(driver);
+        guard.active_connection_id = Some(stored_cfg.id.clone());
+        guard.active_config = Some(stored_cfg);
         Ok(())
     }
 
-    pub fn disconnect(&self) {
-        self.set_active_connection(None);
+    pub async fn disconnect(&self) {
+        let driver = {
+            let mut guard = self.inner.lock().expect("state lock poisoned");
+            guard.active_connection_id = None;
+            guard.active_config = None;
+            guard.active_driver.take()
+        };
+        if let Some(driver) = driver {
+            let _ = spawn_tokio(async move { driver.disconnect().await }).await;
+        }
     }
 
-    pub async fn list_schema(&self) -> Result<Vec<(String, Vec<String>)>, Box<dyn std::error::Error>> {
-        Ok(vec![])
+    pub async fn list_schema(&self) -> Result<Vec<(String, Vec<String>)>, String> {
+        let (driver, config) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let database = config.database.clone();
+        let tables = spawn_tokio(async move { driver.list_tables(&database).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))??;
+        let label = match config.driver {
+            crate::config::connection::DriverType::SQLite => "main".to_string(),
+            _ => config.database.clone(),
+        };
+        Ok(vec![(label, tables)])
     }
 
-    pub async fn execute_query(
-        &self,
-        _sql: &str,
-    ) -> Result<crate::db::driver::QueryResult, Box<dyn std::error::Error>> {
-        Ok(crate::db::driver::QueryResult {
-            rows_affected: 0,
-            columns: vec![],
-            rows: vec![],
-            execution_time_ms: 0,
-        })
+    pub async fn execute_query(&self, sql: &str) -> Result<crate::db::driver::QueryResult, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let sql = sql.to_string();
+        spawn_tokio(async move { driver.execute_query(&sql).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
     }
 
     pub async fn load_table_data(
         &self,
         _database: &str,
-        _table: &str,
-        _page: u64,
-        _page_size: u64,
-        _order_by: Option<(String, bool)>,
-    ) -> Result<crate::db::driver::QueryResult, Box<dyn std::error::Error>> {
-        Ok(crate::db::driver::QueryResult {
-            rows_affected: 0,
-            columns: vec![],
-            rows: vec![],
-            execution_time_ms: 0,
+        table: &str,
+        page: u64,
+        page_size: u64,
+        order_by: Option<(String, bool)>,
+    ) -> Result<crate::db::driver::QueryResult, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let table = table.to_string();
+        spawn_tokio(async move {
+            let order_ref = order_by.as_ref().map(|(c, a)| (c.as_str(), *a));
+            driver
+                .fetch_table_data(&table, page * page_size, page_size, order_ref)
+                .await
         })
+        .await
+        .map_err(|e| format!("join error: {e}"))?
     }
 }

@@ -29,7 +29,7 @@ impl ConnectionPanel {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
             .build();
-        
+
         let title = gtk::Label::builder()
             .label("Connections")
             .halign(gtk::Align::Start)
@@ -43,7 +43,7 @@ impl ConnectionPanel {
             .spacing(6)
             .homogeneous(true)
             .build();
-        
+
         let add_button = gtk::Button::builder()
             .icon_name("list-add-symbolic")
             .tooltip_text("Add Connection")
@@ -56,7 +56,7 @@ impl ConnectionPanel {
             .icon_name("edit-delete-symbolic")
             .tooltip_text("Delete Connection")
             .build();
-        
+
         actions.append(&add_button);
         actions.append(&edit_button);
         actions.append(&delete_button);
@@ -67,15 +67,13 @@ impl ConnectionPanel {
             .spacing(6)
             .homogeneous(true)
             .build();
-        
+
         let connect_button = gtk::Button::builder()
             .label("Connect")
             .css_classes(vec!["suggested-action"])
             .build();
-        let disconnect_button = gtk::Button::builder()
-            .label("Disconnect")
-            .build();
-        
+        let disconnect_button = gtk::Button::builder().label("Disconnect").build();
+
         link_actions.append(&connect_button);
         link_actions.append(&disconnect_button);
         root.append(&link_actions);
@@ -84,7 +82,7 @@ impl ConnectionPanel {
             .vexpand(true)
             .hscrollbar_policy(gtk::PolicyType::Never)
             .build();
-        
+
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)
             .build();
@@ -127,7 +125,7 @@ impl ConnectionPanel {
                 crate::config::connection::DriverType::MySQL => "network-server-symbolic",
                 crate::config::connection::DriverType::SQLite => "drive-harddisk-symbolic",
             };
-            
+
             let icon = gtk::Image::builder()
                 .icon_name(icon_name)
                 .pixel_size(24)
@@ -135,10 +133,14 @@ impl ConnectionPanel {
 
             let is_active = active_id == Some(conn.id.as_str());
             let status_icon = gtk::Image::builder()
-                .icon_name(if is_active { "emblem-ok-symbolic" } else { "network-offline-symbolic" })
+                .icon_name(if is_active {
+                    "emblem-ok-symbolic"
+                } else {
+                    "network-offline-symbolic"
+                })
                 .pixel_size(16)
                 .build();
-            
+
             if is_active {
                 status_icon.add_css_class("success");
             }
@@ -148,33 +150,33 @@ impl ConnectionPanel {
                 .spacing(2)
                 .hexpand(true)
                 .build();
-            
+
             let name = gtk::Label::builder()
                 .label(&conn.name)
                 .halign(gtk::Align::Start)
                 .build();
             name.add_css_class("heading");
-            
+
             let driver_label = match conn.driver {
                 crate::config::connection::DriverType::PostgreSQL => "PostgreSQL",
                 crate::config::connection::DriverType::MySQL => "MySQL",
                 crate::config::connection::DriverType::SQLite => "SQLite",
             };
-            
+
             let details = gtk::Label::builder()
                 .label(&format!("{} • {}", driver_label, conn.host))
                 .halign(gtk::Align::Start)
                 .build();
             details.add_css_class("dim-label");
             details.add_css_class("caption");
-            
+
             text_box.append(&name);
             text_box.append(&details);
 
             item.append(&icon);
             item.append(&text_box);
             item.append(&status_icon);
-            
+
             row.set_child(Some(&item));
             self.list.append(&row);
         }

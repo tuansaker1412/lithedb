@@ -4,6 +4,8 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+use crate::config::crypto;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DriverType {
     PostgreSQL,
@@ -83,18 +85,15 @@ impl ConnectionStore {
     }
 
     pub fn save_password(&self, id: &str, password: &str) -> io::Result<()> {
-        let _ = (id, password);
-        Ok(())
+        crypto::store_password(id, password).map_err(io::Error::other)
     }
 
     pub fn load_password(&self, id: &str) -> io::Result<String> {
-        let _ = id;
-        Ok(String::new())
+        Ok(crypto::load_password(id).unwrap_or_default())
     }
 
     pub fn delete_password(&self, id: &str) -> io::Result<()> {
-        let _ = id;
-        Ok(())
+        crypto::delete_password(id).map_err(io::Error::other)
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -122,7 +121,8 @@ mod tests {
 
     #[test]
     fn save_load_round_trip_without_serializing_password() {
-        let tempdir = std::env::temp_dir().join(format!("table-pro-linux-test-{}", std::process::id()));
+        let tempdir =
+            std::env::temp_dir().join(format!("table-pro-linux-test-{}", std::process::id()));
         let _ = fs::create_dir_all(&tempdir);
         let file = tempdir.join("connections.json");
         let store = ConnectionStore::from_path(file.clone());

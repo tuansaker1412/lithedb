@@ -91,7 +91,7 @@ fn fallback_decrypt_legacy_enc01(connection_id: &str, data: &str) -> Option<Stri
     let bytes = hex::decode(raw).ok()?;
     let key = derive_key(connection_id)?;
     let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
-    let nonce = Nonce::from_slice(b"tableprolinuxnonce");
+    let nonce = Nonce::from_slice(b"tplinuxnonc1");
     let plaintext = cipher.decrypt(nonce, bytes.as_ref()).ok()?;
     String::from_utf8(plaintext).ok()
 }
@@ -165,8 +165,10 @@ mod tests {
         let id = "conn-legacy";
         let key = derive_key(id).expect("key");
         let cipher = Aes256Gcm::new_from_slice(&key).expect("cipher");
-        let nonce = Nonce::from_slice(b"tableprolinuxnonce");
-        let ciphertext = cipher.encrypt(nonce, b"legacy-secret".as_ref()).expect("enc");
+        let nonce = Nonce::from_slice(b"tplinuxnonc1");
+        let ciphertext = cipher
+            .encrypt(nonce, b"legacy-secret".as_ref())
+            .expect("enc");
         let legacy = format!("enc:01{}", hex::encode(ciphertext));
         let decrypted = fallback_decrypt_legacy_enc01(id, &legacy).expect("dec");
         assert_eq!(decrypted, "legacy-secret");

@@ -1,5 +1,5 @@
-use gtk4 as gtk;
 use gtk::prelude::*;
+use gtk4 as gtk;
 use libadwaita as adw;
 
 use crate::ui::window::MainWindow;

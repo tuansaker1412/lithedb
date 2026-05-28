@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use gtk::glib;
 use gtk4 as gtk;
-use libadwaita::prelude::*;
 use libadwaita as adw;
+use libadwaita::prelude::*;
 
 use crate::config::connection::{ConnectionConfig, ConnectionStore};
 use crate::state::app_state::AppState;
@@ -52,7 +52,7 @@ impl MainWindow {
 
         // Create header bar
         let header_bar = AppHeaderBar::new();
-        
+
         // Create main components
         let panel = ConnectionPanel::new();
         let schema_tree = SchemaTree::new();
@@ -98,7 +98,7 @@ impl MainWindow {
             .margin_top(4)
             .margin_bottom(4)
             .build();
-        
+
         let status_label = gtk::Label::builder()
             .label("Ready")
             .halign(gtk::Align::Start)
@@ -106,15 +106,7 @@ impl MainWindow {
             .build();
         status_bar.append(&status_label);
 
-        // Create main content box
-        let content_box = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .build();
-        content_box.append(&main_paned);
-        content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-        content_box.append(&status_bar);
-
-        // Create toolbar box with header
+        // Create main content with header + body + status bar
         let content_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
@@ -124,7 +116,6 @@ impl MainWindow {
         content_box.append(&status_bar);
 
         window.set_content(Some(&content_box));
-
 
         let this = Self {
             window,
@@ -160,20 +151,24 @@ impl MainWindow {
 
     fn current_query_tab(&self) -> Option<QueryTab> {
         let page_num = self.notebook.current_page()?;
-        self.tabs.lock().expect("state lock poisoned").get(page_num as usize).cloned()
+        self.tabs
+            .lock()
+            .expect("state lock poisoned")
+            .get(page_num as usize)
+            .cloned()
     }
 
     fn create_query_tab(&self) {
         let mut tabs = self.tabs.lock().expect("state lock poisoned");
         let idx = tabs.len();
         let tab = QueryTab::new(&format!("Query {}", idx + 1));
-        
+
         let tab_label = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(4)
             .build();
         tab_label.append(&gtk::Label::new(Some(&format!("Query {}", idx + 1))));
-        
+
         let close_btn = gtk::Button::builder()
             .icon_name("window-close-symbolic")
             .has_frame(false)
@@ -238,7 +233,9 @@ impl MainWindow {
         // Connection panel events
         {
             let this2 = self.clone_refs();
-            self.panel.add_button.connect_clicked(move |_| this2.open_dialog(None));
+            self.panel
+                .add_button
+                .connect_clicked(move |_| this2.open_dialog(None));
         }
         {
             let this2 = self.clone_refs();
@@ -252,15 +249,21 @@ impl MainWindow {
         }
         {
             let this2 = self.clone_refs();
-            self.panel.delete_button.connect_clicked(move |_| this2.delete_connection());
+            self.panel
+                .delete_button
+                .connect_clicked(move |_| this2.delete_connection());
         }
         {
             let this2 = self.clone_refs();
-            self.panel.connect_button.connect_clicked(move |_| this2.connect_to_selected());
+            self.panel
+                .connect_button
+                .connect_clicked(move |_| this2.connect_to_selected());
         }
         {
             let this2 = self.clone_refs();
-            self.panel.disconnect_button.connect_clicked(move |_| this2.disconnect_active());
+            self.panel
+                .disconnect_button
+                .connect_clicked(move |_| this2.disconnect_active());
         }
 
         // Schema tree events
@@ -280,19 +283,27 @@ impl MainWindow {
         // Result grid pagination
         {
             let this2 = self.clone_refs();
-            self.result_grid.prev_button.connect_clicked(move |_| this2.prev_page());
+            self.result_grid
+                .prev_button
+                .connect_clicked(move |_| this2.prev_page());
         }
         {
             let this2 = self.clone_refs();
-            self.result_grid.next_button.connect_clicked(move |_| this2.next_page());
+            self.result_grid
+                .next_button
+                .connect_clicked(move |_| this2.next_page());
         }
         {
             let this2 = self.clone_refs();
-            self.result_grid.apply_sort_button.connect_clicked(move |_| this2.apply_sort());
+            self.result_grid
+                .apply_sort_button
+                .connect_clicked(move |_| this2.apply_sort());
         }
         {
             let this2 = self.clone_refs();
-            self.result_grid.export_csv_button.connect_clicked(move |_| this2.export_csv());
+            self.result_grid
+                .export_csv_button
+                .connect_clicked(move |_| this2.export_csv());
         }
 
         // Keyboard shortcuts
@@ -355,10 +366,16 @@ impl MainWindow {
 
     fn setup_keyboard_shortcuts(&self) {
         let controller = gtk::EventControllerKey::new();
-        
+
         let this2 = self.clone_refs();
         controller.connect_key_pressed(move |_, key, _, state| {
-            if state.contains(gtk::gdk::ModifierType::CONTROL_MASK) {
+            let ctrl = state.contains(gtk::gdk::ModifierType::CONTROL_MASK);
+            let shift = state.contains(gtk::gdk::ModifierType::SHIFT_MASK);
+            if ctrl && shift && matches!(key, gtk::gdk::Key::C | gtk::gdk::Key::c) {
+                this2.open_dialog(None);
+                return true.into();
+            }
+            if ctrl {
                 match key {
                     gtk::gdk::Key::t => {
                         this2.create_query_tab();
@@ -383,7 +400,7 @@ impl MainWindow {
             }
             false.into()
         });
-        
+
         self.window.add_controller(controller);
     }
 
@@ -435,12 +452,16 @@ impl MainWindow {
                     this2.status_label.set_text("Connecting...");
                     match this2.state.connect(&cfg2, &password).await {
                         Ok(_) => {
-                            this2.status_label.set_text(&format!("Connected to {}", cfg2.name));
+                            this2
+                                .status_label
+                                .set_text(&format!("Connected to {}", cfg2.name));
                             this2.refresh_list();
                             this2.refresh_schema_tree();
                         }
                         Err(e) => {
-                            this2.status_label.set_text(&format!("Connection failed: {}", e));
+                            this2
+                                .status_label
+                                .set_text(&format!("Connection failed: {}", e));
                             this2.toast(&format!("Failed to connect: {}", e));
                         }
                     }
@@ -450,10 +471,14 @@ impl MainWindow {
     }
 
     fn disconnect_active(&self) {
-        self.state.disconnect();
-        self.status_label.set_text("Disconnected");
-        self.refresh_list();
-        self.refresh_schema_tree();
+        let this2 = self.clone_refs();
+        glib::spawn_future_local(async move {
+            this2.state.disconnect().await;
+            this2.status_label.set_text("Disconnected");
+            this2.refresh_list();
+            this2.refresh_schema_tree();
+            this2.result_grid.clear();
+        });
     }
 
     fn refresh_schema_tree(&self) {
@@ -496,7 +521,12 @@ impl MainWindow {
                 }
             };
 
-            let conn = match self.state.connections().iter().find(|c| c.name == conn_name) {
+            let conn = match self
+                .state
+                .connections()
+                .iter()
+                .find(|c| c.name == conn_name)
+            {
                 Some(c) => c.clone(),
                 None => {
                     tab.set_status("Connection not found");
@@ -510,13 +540,15 @@ impl MainWindow {
             let this2 = self.clone_refs();
             glib::spawn_future_local(async move {
                 let password = this2.store.load_password(&conn.id).unwrap_or_default();
-                
+
                 if this2.state.active_connection_id().as_deref() != Some(&conn.id) {
                     if let Err(e) = this2.state.connect(&conn, &password).await {
                         if let Some(tab) = this2.current_query_tab() {
                             tab.set_status(&format!("Connection failed: {}", e));
                         }
-                        this2.result_grid.set_error(&format!("Connection failed: {}", e));
+                        this2
+                            .result_grid
+                            .set_error(&format!("Connection failed: {}", e));
                         return;
                     }
                 }
@@ -556,26 +588,38 @@ impl MainWindow {
         drop(data_state);
 
         self.result_grid.set_loading();
-        self.status_label.set_text(&format!("Loading {}.{}...", database, table));
+        self.status_label
+            .set_text(&format!("Loading {}.{}...", database, table));
 
         let db = database.to_string();
         let tbl = table.to_string();
         let this2 = self.clone_refs();
 
         glib::spawn_future_local(async move {
-            let data_state = this2.data_state.lock().expect("data state lock poisoned");
-            let page = data_state.page;
-            let page_size = data_state.page_size;
-            let order_by = data_state.order_by.clone();
-            drop(data_state);
+            let (page, page_size, order_by) = {
+                let data_state = this2.data_state.lock().expect("data state lock poisoned");
+                (
+                    data_state.page,
+                    data_state.page_size,
+                    data_state.order_by.clone(),
+                )
+            };
 
-            match this2.state.load_table_data(&db, &tbl, page, page_size, order_by).await {
+            match this2
+                .state
+                .load_table_data(&db, &tbl, page, page_size, order_by)
+                .await
+            {
                 Ok(result) => {
                     this2.result_grid.set_page_data(page, page_size, &result);
-                    this2.status_label.set_text(&format!("Loaded {}.{}", db, tbl));
+                    this2
+                        .status_label
+                        .set_text(&format!("Loaded {}.{}", db, tbl));
                 }
                 Err(e) => {
-                    this2.result_grid.set_error(&format!("Error loading table: {}", e));
+                    this2
+                        .result_grid
+                        .set_error(&format!("Error loading table: {}", e));
                     this2.status_label.set_text(&format!("Error: {}", e));
                 }
             }
@@ -636,7 +680,10 @@ impl MainWindow {
                 Some("Export CSV"),
                 Some(&self.window),
                 gtk::FileChooserAction::Save,
-                &[("Cancel", gtk::ResponseType::Cancel), ("Save", gtk::ResponseType::Accept)],
+                &[
+                    ("Cancel", gtk::ResponseType::Cancel),
+                    ("Save", gtk::ResponseType::Accept),
+                ],
             );
             chooser.set_current_name("export.csv");
 
@@ -675,10 +722,16 @@ impl MainWindow {
         let follow_switch = gtk::Switch::builder().active(true).build();
         let dark_switch = gtk::Switch::builder().active(false).build();
 
-        let row1 = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(8).build();
+        let row1 = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
+            .build();
         row1.append(&gtk::Label::new(Some("Follow system theme")));
         row1.append(&follow_switch);
-        let row2 = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(8).build();
+        let row2 = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
+            .build();
         row2.append(&gtk::Label::new(Some("Force dark mode")));
         row2.append(&dark_switch);
 
@@ -748,10 +801,16 @@ impl MainWindow {
             "Ctrl+W: Close query tab",
             "Ctrl+Enter: Run query",
             "Ctrl+R: Refresh schema",
+            "Ctrl+Shift+C: New connection",
             "F5: Reload table data",
             "F1: Show shortcuts",
         ] {
-            boxv.append(&gtk::Label::builder().label(line).halign(gtk::Align::Start).build());
+            boxv.append(
+                &gtk::Label::builder()
+                    .label(line)
+                    .halign(gtk::Align::Start)
+                    .build(),
+            );
         }
         win.set_child(Some(&boxv));
         win.present();

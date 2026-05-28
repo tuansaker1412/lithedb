@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use sqlx::{sqlite::SqlitePoolOptions, Column, Row, SqlitePool};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::{Column, Row, SqlitePool, TypeInfo};
+use std::str::FromStr;
 use tokio::sync::Mutex;
 
 use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
@@ -17,9 +19,14 @@ impl SqliteDriver {
         Self::default()
     }
 
-    fn conn_str(config: &ConnectionConfig) -> String {
-        // For SQLite, database field stores absolute file path.
-        format!("sqlite://{}", config.database)
+    fn connect_options(config: &ConnectionConfig) -> Result<SqliteConnectOptions, String> {
+        let path = config.database.trim();
+        if path.is_empty() {
+            return Err("sqlite database path is empty".to_string());
+        }
+        SqliteConnectOptions::from_str(&format!("sqlite://{}", path))
+            .map(|o| o.create_if_missing(false))
+            .map_err(|e| e.to_string())
     }
 
     fn quote_ident(ident: &str) -> String {
@@ -35,15 +42,54 @@ impl SqliteDriver {
         row.columns()
             .iter()
             .enumerate()
-            .map(|(idx, _)| {
-                row.try_get::<Option<String>, _>(idx)
-                    .ok()
-                    .flatten()
-                    .or_else(|| row.try_get::<Option<i64>, _>(idx).ok().flatten().map(|v| v.to_string()))
-                    .or_else(|| row.try_get::<Option<f64>, _>(idx).ok().flatten().map(|v| v.to_string()))
-                    .or_else(|| row.try_get::<Option<bool>, _>(idx).ok().flatten().map(|v| v.to_string()))
-            })
+            .map(|(idx, col)| Self::value_to_string(row, idx, col.type_info().name()))
             .collect()
+    }
+
+    fn value_to_string(
+        row: &sqlx::sqlite::SqliteRow,
+        idx: usize,
+        type_name: &str,
+    ) -> Option<String> {
+        let upper = type_name.to_ascii_uppercase();
+        match upper.as_str() {
+            "INTEGER" | "INT" | "INT8" | "BIGINT" => row
+                .try_get::<Option<i64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "REAL" | "FLOAT" | "DOUBLE" => row
+                .try_get::<Option<f64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "BOOLEAN" => row
+                .try_get::<Option<bool>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "BLOB" => row
+                .try_get::<Option<Vec<u8>>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| format!("0x{}", hex::encode(v))),
+            _ => row
+                .try_get::<Option<String>, _>(idx)
+                .ok()
+                .flatten()
+                .or_else(|| {
+                    row.try_get::<Option<i64>, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                })
+                .or_else(|| {
+                    row.try_get::<Option<f64>, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                }),
+        }
     }
 }
 
@@ -52,7 +98,7 @@ impl DatabaseDriver for SqliteDriver {
     async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), String> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
-            .connect(&Self::conn_str(config))
+            .connect_with(Self::connect_options(config)?)
             .await
             .map_err(|e| e.to_string())?;
         sqlx::query("SELECT 1")
@@ -66,7 +112,7 @@ impl DatabaseDriver for SqliteDriver {
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), String> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
-            .connect(&Self::conn_str(config))
+            .connect_with(Self::connect_options(config)?)
             .await
             .map_err(|e| e.to_string())?;
         *self.pool.lock().await = Some(pool);
@@ -112,14 +158,8 @@ impl DatabaseDriver for SqliteDriver {
             .map(|r| ColumnInfo {
                 name: r.try_get::<String, _>(1).unwrap_or_default(),
                 data_type: r.try_get::<String, _>(2).unwrap_or_default(),
-                nullable: r
-                    .try_get::<i64, _>(3)
-                    .map(|v| v == 0)
-                    .unwrap_or(false),
-                is_primary_key: r
-                    .try_get::<i64, _>(5)
-                    .map(|v| v > 0)
-                    .unwrap_or(false),
+                nullable: r.try_get::<i64, _>(3).map(|v| v == 0).unwrap_or(false),
+                is_primary_key: r.try_get::<i64, _>(5).map(|v| v > 0).unwrap_or(false),
             })
             .collect())
     }
@@ -143,7 +183,10 @@ impl DatabaseDriver for SqliteDriver {
                 })
             }
             Err(_) => {
-                let done = sqlx::query(sql).execute(&pool).await.map_err(|e| e.to_string())?;
+                let done = sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok(QueryResult {
                     columns: Vec::new(),
                     rows: Vec::new(),

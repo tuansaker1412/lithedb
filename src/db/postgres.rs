@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use sqlx::{postgres::PgPoolOptions, Column, PgPool, Row};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
+use sqlx::{Column, PgPool, Row, TypeInfo};
 use tokio::sync::Mutex;
 
 use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
@@ -17,12 +18,23 @@ impl PostgresDriver {
         Self::default()
     }
 
-    fn conn_str(config: &ConnectionConfig) -> String {
-        let ssl_mode = if config.ssl { "require" } else { "disable" };
-        format!(
-            "postgres://{}:{}@{}:{}/{}?sslmode={}",
-            config.username, config.password, config.host, config.port, config.database, ssl_mode
-        )
+    fn connect_options(config: &ConnectionConfig) -> PgConnectOptions {
+        let mut opts = PgConnectOptions::new()
+            .host(&config.host)
+            .port(config.port)
+            .username(&config.username)
+            .ssl_mode(if config.ssl {
+                PgSslMode::Require
+            } else {
+                PgSslMode::Disable
+            });
+        if !config.password.is_empty() {
+            opts = opts.password(&config.password);
+        }
+        if !config.database.is_empty() {
+            opts = opts.database(&config.database);
+        }
+        opts
     }
 
     fn quote_ident(ident: &str) -> String {
@@ -31,24 +43,74 @@ impl PostgresDriver {
 
     async fn get_pool(&self) -> Result<PgPool, String> {
         let guard = self.pool.lock().await;
-        guard
-            .clone()
-            .ok_or_else(|| "not connected".to_string())
+        guard.clone().ok_or_else(|| "not connected".to_string())
     }
 
     fn row_to_strings(row: &sqlx::postgres::PgRow) -> Vec<Option<String>> {
         row.columns()
             .iter()
             .enumerate()
-            .map(|(idx, _)| {
-                row.try_get::<Option<String>, _>(idx)
-                    .ok()
-                    .flatten()
-                    .or_else(|| row.try_get::<Option<i64>, _>(idx).ok().flatten().map(|v| v.to_string()))
-                    .or_else(|| row.try_get::<Option<f64>, _>(idx).ok().flatten().map(|v| v.to_string()))
-                    .or_else(|| row.try_get::<Option<bool>, _>(idx).ok().flatten().map(|v| v.to_string()))
-            })
+            .map(|(idx, col)| Self::pg_value_to_string(row, idx, col.type_info().name()))
             .collect()
+    }
+
+    fn pg_value_to_string(
+        row: &sqlx::postgres::PgRow,
+        idx: usize,
+        type_name: &str,
+    ) -> Option<String> {
+        match type_name {
+            "BOOL" => row
+                .try_get::<Option<bool>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "INT2" => row
+                .try_get::<Option<i16>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "INT4" => row
+                .try_get::<Option<i32>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "INT8" => row
+                .try_get::<Option<i64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "FLOAT4" => row
+                .try_get::<Option<f32>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "FLOAT8" => row
+                .try_get::<Option<f64>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "BYTEA" => row
+                .try_get::<Option<Vec<u8>>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| format!("\\x{}", hex::encode(v))),
+            "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CHAR" | "CITEXT" | "UUID" | "INET"
+            | "CIDR" | "MACADDR" | "MACADDR8" | "JSON" | "JSONB" | "XML" | "DATE" | "TIME"
+            | "TIMETZ" | "TIMESTAMP" | "TIMESTAMPTZ" | "INTERVAL" | "NUMERIC" | "MONEY"
+            | "POINT" | "LINE" | "LSEG" | "BOX" | "PATH" | "POLYGON" | "CIRCLE" | "TSVECTOR"
+            | "TSQUERY" => row.try_get::<Option<String>, _>(idx).ok().flatten(),
+            _ => row
+                .try_get::<Option<String>, _>(idx)
+                .ok()
+                .flatten()
+                .or_else(|| {
+                    row.try_get::<Option<i64>, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
+                }),
+        }
     }
 }
 
@@ -57,7 +119,7 @@ impl DatabaseDriver for PostgresDriver {
     async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), String> {
         let pool = PgPoolOptions::new()
             .max_connections(1)
-            .connect(&Self::conn_str(config))
+            .connect_with(Self::connect_options(config))
             .await
             .map_err(|e| e.to_string())?;
         sqlx::query("SELECT 1")
@@ -71,7 +133,7 @@ impl DatabaseDriver for PostgresDriver {
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), String> {
         let pool = PgPoolOptions::new()
             .max_connections(5)
-            .connect(&Self::conn_str(config))
+            .connect_with(Self::connect_options(config))
             .await
             .map_err(|e| e.to_string())?;
         *self.pool.lock().await = Some(pool);
@@ -86,10 +148,12 @@ impl DatabaseDriver for PostgresDriver {
 
     async fn list_databases(&self) -> Result<Vec<String>, String> {
         let pool = self.get_pool().await?;
-        let rows = sqlx::query("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname")
-            .fetch_all(&pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        let rows = sqlx::query(
+            "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
         Ok(rows
             .iter()
             .filter_map(|r| r.try_get::<String, _>(0).ok())
@@ -172,7 +236,10 @@ impl DatabaseDriver for PostgresDriver {
                 })
             }
             Err(_) => {
-                let done = sqlx::query(sql).execute(&pool).await.map_err(|e| e.to_string())?;
+                let done = sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok(QueryResult {
                     columns: Vec::new(),
                     rows: Vec::new(),
@@ -190,7 +257,7 @@ impl DatabaseDriver for PostgresDriver {
         limit: u64,
         order_by: Option<(&str, bool)>,
     ) -> Result<QueryResult, String> {
-        let _pool = self.get_pool().await?;
+        let pool = self.get_pool().await?;
         let order_clause = order_by
             .map(|(col, asc)| {
                 format!(
@@ -201,8 +268,34 @@ impl DatabaseDriver for PostgresDriver {
             })
             .unwrap_or_default();
 
+        let columns = sqlx::query(
+            "SELECT column_name FROM information_schema.columns \
+             WHERE table_schema = current_schema() AND table_name = $1 \
+             ORDER BY ordinal_position",
+        )
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let column_names: Vec<String> = columns
+            .iter()
+            .filter_map(|r| r.try_get::<String, _>(0).ok())
+            .collect();
+
+        let select_list = if column_names.is_empty() {
+            "*".to_string()
+        } else {
+            column_names
+                .iter()
+                .map(|c| format!("{col}::text AS {col}", col = Self::quote_ident(c),))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
         let sql = format!(
-            "SELECT * FROM {}{} LIMIT {} OFFSET {}",
+            "SELECT {} FROM {}{} LIMIT {} OFFSET {}",
+            select_list,
             Self::quote_ident(table),
             order_clause,
             limit,

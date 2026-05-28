@@ -1,5 +1,5 @@
-use gtk::prelude::*;
 use gtk::glib;
+use gtk::prelude::*;
 use gtk4 as gtk;
 
 #[derive(Clone)]
@@ -26,19 +26,19 @@ impl SchemaTree {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
             .build();
-        
+
         let title = gtk::Label::builder()
             .label("Schema")
             .hexpand(true)
             .halign(gtk::Align::Start)
             .build();
         title.add_css_class("heading");
-        
+
         let refresh_button = gtk::Button::builder()
             .icon_name("view-refresh-symbolic")
             .tooltip_text("Refresh Schema (Ctrl+R)")
             .build();
-        
+
         header.append(&title);
         header.append(&refresh_button);
         root.append(&header);
@@ -57,15 +57,15 @@ impl SchemaTree {
             .build();
 
         let column = gtk::TreeViewColumn::new();
-        
+
         let icon_renderer = gtk::CellRendererPixbuf::new();
         column.pack_start(&icon_renderer, false);
         column.add_attribute(&icon_renderer, "icon-name", 0);
-        
+
         let text_renderer = gtk::CellRendererText::new();
         column.pack_start(&text_renderer, true);
         column.add_attribute(&text_renderer, "text", 1);
-        
+
         tree_view.append_column(&column);
 
         let scrolled = gtk::ScrolledWindow::builder()
@@ -88,18 +88,19 @@ impl SchemaTree {
     where
         F: Fn(String, String) + 'static,
     {
-        self.tree_view.connect_row_activated(move |tree_view, path, _column| {
-            if let Some(model) = tree_view.model() {
-                if let Some(iter) = model.iter(path) {
-                    let item_type: String = model.get(&iter, 2);
-                    if item_type == "table" {
-                        let db: String = model.get(&iter, 3);
-                        let table: String = model.get(&iter, 1);
-                        f(db, table);
+        self.tree_view
+            .connect_row_activated(move |tree_view, path, _column| {
+                if let Some(model) = tree_view.model() {
+                    if let Some(iter) = model.iter(path) {
+                        let item_type: String = model.get(&iter, 2);
+                        if item_type == "table" {
+                            let db: String = model.get(&iter, 3);
+                            let table: String = model.get(&iter, 1);
+                            f(db, table);
+                        }
                     }
                 }
-            }
-        });
+            });
     }
 
     pub fn set_title(&self, text: &str) {
@@ -109,65 +110,83 @@ impl SchemaTree {
     pub fn set_loading(&self, text: &str) {
         self.tree_store.clear();
         let iter = self.tree_store.append(None);
-        self.tree_store.set(&iter, &[
-            (0, &"emblem-synchronizing-symbolic"),
-            (1, &text),
-            (2, &"loading"),
-            (3, &""),
-        ]);
+        self.tree_store.set(
+            &iter,
+            &[
+                (0, &"emblem-synchronizing-symbolic"),
+                (1, &text),
+                (2, &"loading"),
+                (3, &""),
+            ],
+        );
     }
 
     pub fn set_error(&self, text: &str) {
         self.tree_store.clear();
         let iter = self.tree_store.append(None);
-        self.tree_store.set(&iter, &[
-            (0, &"dialog-error-symbolic"),
-            (1, &text),
-            (2, &"error"),
-            (3, &""),
-        ]);
+        self.tree_store.set(
+            &iter,
+            &[
+                (0, &"dialog-error-symbolic"),
+                (1, &text),
+                (2, &"error"),
+                (3, &""),
+            ],
+        );
     }
 
     pub fn set_empty(&self) {
         self.tree_store.clear();
         let iter = self.tree_store.append(None);
-        self.tree_store.set(&iter, &[
-            (0, &"network-offline-symbolic"),
-            (1, &"No active connection"),
-            (2, &"empty"),
-            (3, &""),
-        ]);
+        self.tree_store.set(
+            &iter,
+            &[
+                (0, &"network-offline-symbolic"),
+                (1, &"No active connection"),
+                (2, &"empty"),
+                (3, &""),
+            ],
+        );
     }
 
     pub fn set_schema(&self, databases: &[(String, Vec<String>)]) {
         self.tree_store.clear();
-        
+
         for (db, tables) in databases {
             let db_iter = self.tree_store.append(None);
-            self.tree_store.set(&db_iter, &[
-                (0, &"folder-symbolic"),
-                (1, &db.as_str()),
-                (2, &"database"),
-                (3, &db.as_str()),
-            ]);
+            self.tree_store.set(
+                &db_iter,
+                &[
+                    (0, &"folder-symbolic"),
+                    (1, &db.as_str()),
+                    (2, &"database"),
+                    (3, &db.as_str()),
+                ],
+            );
 
             if tables.is_empty() {
                 let empty_iter = self.tree_store.append(Some(&db_iter));
-                self.tree_store.set(&empty_iter, &[
-                    (0, &""),
-                    (1, &"(no tables)"),
-                    (2, &"empty"),
-                    (3, &db.as_str()),
-                ]);
+                self.tree_store.set(
+                    &empty_iter,
+                    &[
+                        (0, &""),
+                        (1, &"(no tables)"),
+                        (2, &"empty"),
+                        (3, &db.as_str()),
+                    ],
+                );
             } else {
                 for table in tables {
                     let table_iter = self.tree_store.append(Some(&db_iter));
-                    self.tree_store.set(&table_iter, &[
-                        (0, &"view-list-symbolic"),
-                        (1, &table.as_str()),
-                        (2, &"table"),
-                        (3, &db.as_str()),
-                    ]);
+                    self.tree_store.set(
+                        &table_iter,
+                        &[
+                            (0, &"view-list-symbolic"),
+                            (1, &table.as_str()),
+                            (2, &"table"),
+                            (3, &db.as_str()),
+                        ],
+                    );
                 }
             }
         }
