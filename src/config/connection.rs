@@ -82,6 +82,21 @@ impl ConnectionStore {
         Ok(())
     }
 
+    pub fn save_password(&self, id: &str, password: &str) -> io::Result<()> {
+        let _ = (id, password);
+        Ok(())
+    }
+
+    pub fn load_password(&self, id: &str) -> io::Result<String> {
+        let _ = id;
+        Ok(String::new())
+    }
+
+    pub fn delete_password(&self, id: &str) -> io::Result<()> {
+        let _ = id;
+        Ok(())
+    }
+
     pub fn path(&self) -> &PathBuf {
         &self.path
     }

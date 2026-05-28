@@ -6,12 +6,11 @@ use libadwaita::prelude::*;
 use libadwaita as adw;
 
 use crate::config::connection::{ConnectionConfig, ConnectionStore};
-use crate::config::crypto;
-use crate::db::registry::DriverRegistry;
 use crate::state::app_state::AppState;
 use crate::ui::dialogs::connection_dialog::ConnectionDialog;
 use crate::ui::editor::query_tab::QueryTab;
 use crate::ui::grid::result_grid::ResultGrid;
+use crate::ui::header_bar::AppHeaderBar;
 use crate::ui::sidebar::connection_panel::ConnectionPanel;
 use crate::ui::sidebar::schema_tree::SchemaTree;
 
@@ -28,12 +27,14 @@ pub struct MainWindow {
     window: adw::ApplicationWindow,
     state: AppState,
     store: ConnectionStore,
+    header_bar: AppHeaderBar,
     panel: ConnectionPanel,
     schema_tree: SchemaTree,
-    tab_stack: gtk::Stack,
+    notebook: gtk::Notebook,
     tabs: Arc<Mutex<Vec<QueryTab>>>,
-    active_tab: Arc<Mutex<usize>>,
     result_grid: ResultGrid,
+    status_bar: gtk::Box,
+    status_label: gtk::Label,
     data_state: Arc<Mutex<DataViewState>>,
 }
 
@@ -49,65 +50,94 @@ impl MainWindow {
             .default_height(800)
             .build();
 
+        // Create header bar
+        let header_bar = AppHeaderBar::new();
+        
+        // Create main components
         let panel = ConnectionPanel::new();
         let schema_tree = SchemaTree::new();
         let result_grid = ResultGrid::new();
 
-        let tab_header = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(6)
+        // Create notebook for query tabs
+        let notebook = gtk::Notebook::builder()
+            .scrollable(true)
+            .show_border(false)
+            .vexpand(true)
             .build();
-        let new_conn_btn = gtk::Button::with_label("New Connection");
-        let prefs_btn = gtk::Button::with_label("Preferences");
-        let about_btn = gtk::Button::with_label("About");
-        let new_tab_btn = gtk::Button::with_label("+ Query");
-        let close_tab_btn = gtk::Button::with_label("Close Tab");
-        tab_header.append(&new_conn_btn);
-        tab_header.append(&prefs_btn);
-        tab_header.append(&about_btn);
-        tab_header.append(&new_tab_btn);
-        tab_header.append(&close_tab_btn);
 
-        let tab_stack = gtk::Stack::new();
-        tab_stack.set_vexpand(true);
-
-        let query_area = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(6)
-            .build();
-        query_area.append(&tab_header);
-        query_area.append(&tab_stack);
-
+        // Create query and result area
         let query_and_result = gtk::Paned::builder()
             .orientation(gtk::Orientation::Vertical)
-            .start_child(&query_area)
+            .start_child(&notebook)
             .end_child(&result_grid.root)
+            .position(300)
             .build();
 
+        // Create right side (schema + query/result)
         let right = gtk::Paned::builder()
             .orientation(gtk::Orientation::Vertical)
             .start_child(&schema_tree.root)
             .end_child(&query_and_result)
+            .position(250)
             .build();
 
-        let root = gtk::Paned::builder()
+        // Create main layout (connection panel + right side)
+        let main_paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
             .start_child(&panel.root)
             .end_child(&right)
+            .position(280)
             .build();
 
-        window.set_content(Some(&root));
+        // Create status bar
+        let status_bar = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
+            .margin_start(8)
+            .margin_end(8)
+            .margin_top(4)
+            .margin_bottom(4)
+            .build();
+        
+        let status_label = gtk::Label::builder()
+            .label("Ready")
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .build();
+        status_bar.append(&status_label);
+
+        // Create main content box
+        let content_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .build();
+        content_box.append(&main_paned);
+        content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        content_box.append(&status_bar);
+
+        // Create toolbar box with header
+        let content_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .build();
+        content_box.append(&header_bar.header);
+        content_box.append(&main_paned);
+        content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        content_box.append(&status_bar);
+
+        window.set_content(Some(&content_box));
+
 
         let this = Self {
             window,
             state,
             store,
+            header_bar,
             panel,
             schema_tree,
-            tab_stack,
+            notebook,
             tabs: Arc::new(Mutex::new(Vec::new())),
-            active_tab: Arc::new(Mutex::new(0)),
             result_grid,
+            status_bar,
+            status_label,
             data_state: Arc::new(Mutex::new(DataViewState {
                 page_size: 200,
                 ..DataViewState::default()
@@ -121,27 +151,6 @@ impl MainWindow {
         this.refresh_query_connections();
         this.refresh_schema_tree();
 
-        {
-            let this2 = this.clone_refs();
-            new_tab_btn.connect_clicked(move |_| this2.create_query_tab());
-        }
-        {
-            let this2 = this.clone_refs();
-            close_tab_btn.connect_clicked(move |_| this2.close_active_query_tab());
-        }
-        {
-            let this2 = this.clone_refs();
-            new_conn_btn.connect_clicked(move |_| this2.open_dialog(None));
-        }
-        {
-            let this2 = this.clone_refs();
-            prefs_btn.connect_clicked(move |_| this2.show_preferences_dialog());
-        }
-        {
-            let this2 = this.clone_refs();
-            about_btn.connect_clicked(move |_| this2.show_about_dialog());
-        }
-
         this
     }
 
@@ -150,509 +159,499 @@ impl MainWindow {
     }
 
     fn current_query_tab(&self) -> Option<QueryTab> {
-        let idx = *self.active_tab.lock().expect("state lock poisoned");
-        self.tabs.lock().expect("state lock poisoned").get(idx).cloned()
+        let page_num = self.notebook.current_page()?;
+        self.tabs.lock().expect("state lock poisoned").get(page_num as usize).cloned()
     }
 
     fn create_query_tab(&self) {
         let mut tabs = self.tabs.lock().expect("state lock poisoned");
         let idx = tabs.len();
         let tab = QueryTab::new(&format!("Query {}", idx + 1));
+        
+        let tab_label = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(4)
+            .build();
+        tab_label.append(&gtk::Label::new(Some(&format!("Query {}", idx + 1))));
+        
+        let close_btn = gtk::Button::builder()
+            .icon_name("window-close-symbolic")
+            .has_frame(false)
+            .build();
+        tab_label.append(&close_btn);
 
-        {
-            let this = self.clone_refs();
-            tab.run_button.connect_clicked(move |_| this.run_query_from_editor());
-        }
-        {
-            let this = self.clone_refs();
-            tab.connect_ctrl_enter(move || this.run_query_from_editor());
-        }
+        let page_num = self.notebook.append_page(&tab.root, Some(&tab_label));
+        self.notebook.set_tab_reorderable(&tab.root, true);
+        self.notebook.set_current_page(Some(page_num));
 
-        self.tab_stack
-            .add_titled(&tab.root, Some(&format!("query-{}", idx)), &format!("Query {}", idx + 1));
-        self.tab_stack
-            .set_visible_child_name(&format!("query-{}", idx));
+        let this2 = self.clone_refs();
+        let tab_root = tab.root.clone();
+        close_btn.connect_clicked(move |_| {
+            if let Some(page) = this2.notebook.page_num(&tab_root) {
+                this2.notebook.remove_page(Some(page));
+                let mut tabs = this2.tabs.lock().expect("state lock poisoned");
+                if page < tabs.len() as u32 {
+                    tabs.remove(page as usize);
+                }
+            }
+        });
+
+        let this2 = self.clone_refs();
+        tab.run_button.connect_clicked(move |_| this2.run_query());
+
+        let this2 = self.clone_refs();
+        tab.connect_ctrl_enter(move || this2.run_query());
+
         tabs.push(tab);
-        *self.active_tab.lock().expect("state lock poisoned") = idx;
-        drop(tabs);
-        self.refresh_query_connections();
     }
 
     fn close_active_query_tab(&self) {
-        let mut tabs = self.tabs.lock().expect("state lock poisoned");
-        if tabs.len() <= 1 {
-            return;
-        }
-        let idx = *self.active_tab.lock().expect("state lock poisoned");
-        if let Some(tab) = tabs.get(idx) {
-            self.tab_stack.remove(&tab.root);
-        }
-        tabs.remove(idx);
-        let new_idx = idx.saturating_sub(1).min(tabs.len().saturating_sub(1));
-        *self.active_tab.lock().expect("state lock poisoned") = new_idx;
-        if let Some(tab) = tabs.get(new_idx) {
-            self.tab_stack.set_visible_child(&tab.root);
-        }
-    }
-
-    fn wire_events(&self) {
-        let key = gtk::EventControllerKey::new();
-        {
-            let this = self.clone_refs();
-            key.connect_key_pressed(move |_, key, _, state| {
-                if state.contains(gtk::gdk::ModifierType::CONTROL_MASK) && key == gtk::gdk::Key::t {
-                    this.create_query_tab();
-                    return true.into();
-                }
-                if state.contains(gtk::gdk::ModifierType::CONTROL_MASK) && key == gtk::gdk::Key::w {
-                    this.close_active_query_tab();
-                    return true.into();
-                }
-                if state.contains(gtk::gdk::ModifierType::CONTROL_MASK) && key == gtk::gdk::Key::r {
-                    this.refresh_schema_tree();
-                    return true.into();
-                }
-                if state.contains(gtk::gdk::ModifierType::CONTROL_MASK)
-                    && state.contains(gtk::gdk::ModifierType::SHIFT_MASK)
-                    && key == gtk::gdk::Key::c
-                {
-                    this.open_dialog(None);
-                    return true.into();
-                }
-                if key == gtk::gdk::Key::F5 {
-                    this.load_current_table_page();
-                    return true.into();
-                }
-                if key == gtk::gdk::Key::F1 {
-                    this.show_shortcuts_window();
-                    return true.into();
-                }
-                false.into()
-            });
-        }
-        self.window.add_controller(key);
-
-        {
-            let this = self.clone_refs();
-            self.tab_stack.connect_visible_child_notify(move |s| {
-                if let Some(child) = s.visible_child() {
-                    let tabs = this.tabs.lock().expect("state lock poisoned");
-                    if let Some((idx, _)) = tabs
-                        .iter()
-                        .enumerate()
-                        .find(|(_, t)| t.root == child)
-                    {
-                        *this.active_tab.lock().expect("state lock poisoned") = idx;
-                    }
-                }
-            });
-        }
-
-        {
-            let this = self.clone_refs();
-            self.panel.add_button.connect_clicked(move |_| this.open_dialog(None));
-        }
-        {
-            let this = self.clone_refs();
-            self.panel.edit_button.connect_clicked(move |_| {
-                if let Some(id) = this.panel.selected_id() {
-                    let conn = this.state.list_connections().into_iter().find(|c| c.id == id);
-                    this.open_dialog(conn.as_ref());
-                }
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.panel.delete_button.connect_clicked(move |_| {
-                if let Some(id) = this.panel.selected_id() {
-                    this.state.remove_connection(&id);
-                    let _ = crypto::delete_password(&id);
-                    let _ = this.store.save(&this.state.list_connections());
-                    this.refresh_list();
-                    this.refresh_query_connections();
-                    this.refresh_schema_tree();
-                }
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.panel.connect_button.connect_clicked(move |_| this.connect_selected());
-        }
-        {
-            let this = self.clone_refs();
-            self.panel.disconnect_button.connect_clicked(move |_| {
-                this.state.set_active_connection(None);
-                this.refresh_list();
-                this.refresh_schema_tree();
-                this.result_grid.set_error("Disconnected");
-                this.toast("Disconnected");
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.panel.list.connect_row_activated(move |_, _| this.connect_selected());
-        }
-        {
-            let this = self.clone_refs();
-            self.schema_tree.refresh_button.connect_clicked(move |_| this.refresh_schema_tree());
-        }
-        {
-            let this = self.clone_refs();
-            self.schema_tree.connect_table_activated(move |db, table| {
-                {
-                    let mut st = this.data_state.lock().expect("state lock poisoned");
-                    st._database = Some(db);
-                    st.table = Some(table);
-                    st.page = 0;
-                }
-                this.load_current_table_page();
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.result_grid.prev_button.connect_clicked(move |_| {
-                let mut st = this.data_state.lock().expect("state lock poisoned");
-                if st.page > 0 {
-                    st.page -= 1;
-                }
-                drop(st);
-                this.load_current_table_page();
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.result_grid.next_button.connect_clicked(move |_| {
-                let mut st = this.data_state.lock().expect("state lock poisoned");
-                st.page += 1;
-                drop(st);
-                this.load_current_table_page();
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.result_grid.apply_sort_button.connect_clicked(move |_| {
-                let mut st = this.data_state.lock().expect("state lock poisoned");
-                st.order_by = this.result_grid.current_sort();
-                st.page = 0;
-                drop(st);
-                this.load_current_table_page();
-            });
-        }
-        {
-            let this = self.clone_refs();
-            self.result_grid.export_csv_button.connect_clicked(move |_| {
-                this.export_current_csv();
-            });
+        if let Some(page_num) = self.notebook.current_page() {
+            self.notebook.remove_page(Some(page_num));
+            let mut tabs = self.tabs.lock().expect("state lock poisoned");
+            if (page_num as usize) < tabs.len() {
+                tabs.remove(page_num as usize);
+            }
         }
     }
 
     fn refresh_query_connections(&self) {
-        let names = self
-            .state
-            .list_connections()
-            .into_iter()
-            .map(|c| c.name)
-            .collect::<Vec<_>>();
-        for t in self.tabs.lock().expect("state lock poisoned").iter() {
-            t.set_connections(&names);
+        let conns = self.state.connections();
+        let names: Vec<String> = conns.iter().map(|c| c.name.clone()).collect();
+        for tab in self.tabs.lock().expect("state lock poisoned").iter() {
+            tab.set_connections(&names);
         }
     }
 
-    fn run_query_from_editor(&self) {
-        let Some(tab) = self.current_query_tab() else { return; };
-        let sql = tab.sql_text();
-        if sql.trim().is_empty() {
-            tab.set_status("SQL is empty");
-            return;
-        }
-        let Some(conn_name) = tab.selected_connection_name() else {
-            tab.set_status("No connection selected");
-            return;
-        };
-        let Some(mut conn) = self
-            .state
-            .list_connections()
-            .into_iter()
-            .find(|c| c.name == conn_name)
-        else {
-            tab.set_status("Connection not found");
-            return;
-        };
-
-        conn.password = crypto::load_password(&conn.id).unwrap_or_default();
-        if conn.password.is_empty() {
-            tab.set_status("Password missing");
-            return;
-        }
-
-        tab.set_status("Running query...");
-        self.result_grid.set_loading();
-
-        let this = self.clone_refs();
-        glib::spawn_future_local(async move {
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(err) => {
-                    let this2 = this.clone_refs();
-                    glib::MainContext::default().invoke_local(move || {
-                        if let Some(t) = this2.current_query_tab() {
-                            t.set_status(&format!("Runtime error: {err}"));
-                        }
-                        this2.result_grid.set_error("Runtime error");
-                    });
-                    return;
-                }
-            };
-
-            let driver = DriverRegistry::create(&conn.driver);
-            let result = rt.block_on(async move {
-                driver.connect(&conn).await?;
-                let data = driver.execute_query(&sql).await;
-                let _ = driver.disconnect().await;
-                let data = data?;
-                Ok::<crate::db::driver::QueryResult, String>(data)
+    fn wire_events(&self) {
+        // Header bar events
+        {
+            let this2 = self.clone_refs();
+            self.header_bar.new_tab_button.connect_clicked(move |_| {
+                this2.create_query_tab();
             });
+        }
 
-            let this2 = this.clone_refs();
-            glib::MainContext::default().invoke_local(move || match result {
-                Ok(data) => {
-                    this2.result_grid.set_page_data(0, data.rows.len() as u64, &data);
-                    if let Some(t) = this2.current_query_tab() {
-                        t.set_status(&format!(
-                            "Done: {} rows in {} ms",
-                            data.rows.len(),
-                            data.execution_time_ms
-                        ));
-                    }
-                }
-                Err(err) => {
-                    this2.result_grid.set_error(&format!("Query failed: {err}"));
-                    if let Some(t) = this2.current_query_tab() {
-                        t.set_status("Query failed");
+        // Setup actions
+        self.setup_actions();
+
+        // Connection panel events
+        {
+            let this2 = self.clone_refs();
+            self.panel.add_button.connect_clicked(move |_| this2.open_dialog(None));
+        }
+        {
+            let this2 = self.clone_refs();
+            self.panel.edit_button.connect_clicked(move |_| {
+                if let Some(id) = this2.panel.selected_id() {
+                    if let Some(cfg) = this2.state.get_connection(&id) {
+                        this2.open_dialog(Some(&cfg));
                     }
                 }
             });
-        });
-    }
-
-    fn open_dialog(&self, initial: Option<&ConnectionConfig>) {
-        let this = self.clone_refs();
-        ConnectionDialog::present(&self.window, initial, move |result| {
-            if result.config.name.trim().is_empty() {
-                this.toast("Connection name is required");
-                return;
-            }
-            if !matches!(result.config.driver, crate::config::connection::DriverType::SQLite)
-                && result.config.host.trim().is_empty()
-            {
-                this.toast("Host is required for network databases");
-                return;
-            }
-            if !result.password.is_empty() {
-                let _ = crypto::store_password(&result.config.id, &result.password);
-            }
-            this.state.upsert_connection(result.config);
-            if let Err(err) = this.store.save(&this.state.list_connections()) {
-                this.toast(&format!("Save failed: {err}"));
-                return;
-            }
-            this.refresh_list();
-            this.refresh_query_connections();
-            this.refresh_schema_tree();
-            this.toast("Connection saved");
-        });
-    }
-
-    fn connect_selected(&self) {
-        let Some(id) = self.panel.selected_id() else {
-            self.toast("Select a connection first");
-            return;
-        };
-        let Some(mut conn) = self.state.list_connections().into_iter().find(|c| c.id == id) else {
-            self.toast("Connection not found");
-            return;
-        };
-        conn.password = crypto::load_password(&conn.id).unwrap_or_default();
-        if conn.password.is_empty() {
-            self.toast("Password not found in keyring/fallback");
-            return;
+        }
+        {
+            let this2 = self.clone_refs();
+            self.panel.delete_button.connect_clicked(move |_| this2.delete_connection());
+        }
+        {
+            let this2 = self.clone_refs();
+            self.panel.connect_button.connect_clicked(move |_| this2.connect_to_selected());
+        }
+        {
+            let this2 = self.clone_refs();
+            self.panel.disconnect_button.connect_clicked(move |_| this2.disconnect_active());
         }
 
-        let this = self.clone_refs();
-        glib::spawn_future_local(async move {
-            let driver = DriverRegistry::create(&conn.driver);
-            let conn_id = conn.id.clone();
-            let result = driver.test_connection(&conn).await;
-            match result {
-                Ok(_) => {
-                    this.state.set_active_connection(Some(conn_id));
-                    this.refresh_list();
-                    this.refresh_query_connections();
-                    this.refresh_schema_tree();
-                    this.toast("Connected");
+        // Schema tree events
+        {
+            let this2 = self.clone_refs();
+            self.schema_tree.refresh_button.connect_clicked(move |_| {
+                this2.refresh_schema_tree();
+            });
+        }
+        {
+            let this2 = self.clone_refs();
+            self.schema_tree.connect_table_activated(move |db, table| {
+                this2.load_table_data(&db, &table);
+            });
+        }
+
+        // Result grid pagination
+        {
+            let this2 = self.clone_refs();
+            self.result_grid.prev_button.connect_clicked(move |_| this2.prev_page());
+        }
+        {
+            let this2 = self.clone_refs();
+            self.result_grid.next_button.connect_clicked(move |_| this2.next_page());
+        }
+        {
+            let this2 = self.clone_refs();
+            self.result_grid.apply_sort_button.connect_clicked(move |_| this2.apply_sort());
+        }
+        {
+            let this2 = self.clone_refs();
+            self.result_grid.export_csv_button.connect_clicked(move |_| this2.export_csv());
+        }
+
+        // Keyboard shortcuts
+        self.setup_keyboard_shortcuts();
+    }
+
+    fn setup_actions(&self) {
+        let app = self.window.application().unwrap();
+
+        // New connection action
+        let action_new_conn = gtk::gio::SimpleAction::new("new-connection", None);
+        {
+            let this2 = self.clone_refs();
+            action_new_conn.connect_activate(move |_, _| {
+                this2.open_dialog(None);
+            });
+        }
+        app.add_action(&action_new_conn);
+
+        // Preferences action
+        let action_prefs = gtk::gio::SimpleAction::new("preferences", None);
+        {
+            let this2 = self.clone_refs();
+            action_prefs.connect_activate(move |_, _| {
+                this2.show_preferences_dialog();
+            });
+        }
+        app.add_action(&action_prefs);
+
+        // About action
+        let action_about = gtk::gio::SimpleAction::new("about", None);
+        {
+            let this2 = self.clone_refs();
+            action_about.connect_activate(move |_, _| {
+                this2.show_about_dialog();
+            });
+        }
+        app.add_action(&action_about);
+
+        // Shortcuts action
+        let action_shortcuts = gtk::gio::SimpleAction::new("shortcuts", None);
+        {
+            let this2 = self.clone_refs();
+            action_shortcuts.connect_activate(move |_, _| {
+                this2.show_shortcuts_window();
+            });
+        }
+        app.add_action(&action_shortcuts);
+
+        // Refresh schema action
+        let action_refresh = gtk::gio::SimpleAction::new("refresh-schema", None);
+        {
+            let this2 = self.clone_refs();
+            action_refresh.connect_activate(move |_, _| {
+                this2.refresh_schema_tree();
+            });
+        }
+        app.add_action(&action_refresh);
+    }
+
+    fn setup_keyboard_shortcuts(&self) {
+        let controller = gtk::EventControllerKey::new();
+        
+        let this2 = self.clone_refs();
+        controller.connect_key_pressed(move |_, key, _, state| {
+            if state.contains(gtk::gdk::ModifierType::CONTROL_MASK) {
+                match key {
+                    gtk::gdk::Key::t => {
+                        this2.create_query_tab();
+                        return true.into();
+                    }
+                    gtk::gdk::Key::w => {
+                        this2.close_active_query_tab();
+                        return true.into();
+                    }
+                    gtk::gdk::Key::r => {
+                        this2.refresh_schema_tree();
+                        return true.into();
+                    }
+                    _ => {}
                 }
-                Err(err) => this.toast(&format!("Connection failed: {err}")),
+            } else if key == gtk::gdk::Key::F5 {
+                this2.reload_table_data();
+                return true.into();
+            } else if key == gtk::gdk::Key::F1 {
+                this2.show_shortcuts_window();
+                return true.into();
             }
+            false.into()
         });
+        
+        self.window.add_controller(controller);
     }
 
     fn refresh_list(&self) {
-        let connections = self.state.list_connections();
-        let active = self.state.active_connection_id();
-        self.panel.set_connections(&connections, active.as_deref());
+        let conns = self.state.connections();
+        let active_id = self.state.active_connection_id();
+        self.panel.set_connections(&conns, active_id.as_deref());
+    }
+
+    fn open_dialog(&self, initial: Option<&ConnectionConfig>) {
+        let this2 = self.clone_refs();
+        ConnectionDialog::present(&self.window, initial, move |result| {
+            let mut cfg = result.config;
+            cfg.password = String::new();
+
+            if let Err(e) = this2.store.save_password(&cfg.id, &result.password) {
+                log::error!("failed to save password: {}", e);
+            }
+
+            this2.state.upsert_connection(cfg.clone());
+            if let Err(e) = this2.store.save(&this2.state.connections()) {
+                log::error!("failed to save connections: {}", e);
+            }
+
+            this2.refresh_list();
+            this2.refresh_query_connections();
+        });
+    }
+
+    fn delete_connection(&self) {
+        if let Some(id) = self.panel.selected_id() {
+            self.state.remove_connection(&id);
+            let _ = self.store.delete_password(&id);
+            if let Err(e) = self.store.save(&self.state.connections()) {
+                log::error!("failed to save connections: {}", e);
+            }
+            self.refresh_list();
+            self.refresh_query_connections();
+        }
+    }
+
+    fn connect_to_selected(&self) {
+        if let Some(id) = self.panel.selected_id() {
+            if let Some(cfg) = self.state.get_connection(&id) {
+                let password = self.store.load_password(&cfg.id).unwrap_or_default();
+                let this2 = self.clone_refs();
+                let cfg2 = cfg.clone();
+                glib::spawn_future_local(async move {
+                    this2.status_label.set_text("Connecting...");
+                    match this2.state.connect(&cfg2, &password).await {
+                        Ok(_) => {
+                            this2.status_label.set_text(&format!("Connected to {}", cfg2.name));
+                            this2.refresh_list();
+                            this2.refresh_schema_tree();
+                        }
+                        Err(e) => {
+                            this2.status_label.set_text(&format!("Connection failed: {}", e));
+                            this2.toast(&format!("Failed to connect: {}", e));
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    fn disconnect_active(&self) {
+        self.state.disconnect();
+        self.status_label.set_text("Disconnected");
+        self.refresh_list();
+        self.refresh_schema_tree();
     }
 
     fn refresh_schema_tree(&self) {
-        let Some(active_id) = self.state.active_connection_id() else {
+        if let Some(conn_id) = self.state.active_connection_id() {
+            if let Some(cfg) = self.state.get_connection(&conn_id) {
+                self.schema_tree.set_title(&format!("Schema: {}", cfg.name));
+                self.schema_tree.set_loading("Loading schema...");
+
+                let this2 = self.clone_refs();
+                glib::spawn_future_local(async move {
+                    match this2.state.list_schema().await {
+                        Ok(schema) => {
+                            this2.schema_tree.set_schema(&schema);
+                        }
+                        Err(e) => {
+                            this2.schema_tree.set_error(&format!("Error: {}", e));
+                        }
+                    }
+                });
+            }
+        } else {
             self.schema_tree.set_title("Schema");
             self.schema_tree.set_empty();
-            return;
-        };
-        let Some(mut conn) = self
-            .state
-            .list_connections()
-            .into_iter()
-            .find(|c| c.id == active_id)
-        else {
-            self.schema_tree.set_empty();
-            return;
-        };
-
-        conn.password = crypto::load_password(&conn.id).unwrap_or_default();
-        if conn.password.is_empty() {
-            self.schema_tree.set_error("Password missing for active connection");
-            return;
         }
+    }
 
-        self.schema_tree.set_title(&format!("Schema: {}", conn.name));
-        self.schema_tree.set_loading("Loading databases and tables...");
+    fn run_query(&self) {
+        if let Some(tab) = self.current_query_tab() {
+            let sql = tab.sql_text();
+            if sql.trim().is_empty() {
+                tab.set_status("No query to run");
+                return;
+            }
 
-        let this = self.clone_refs();
-        glib::spawn_future_local(async move {
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(err) => {
-                    let this2 = this.clone_refs();
-                    glib::MainContext::default().invoke_local(move || {
-                        this2.schema_tree.set_error(&format!("Runtime error: {err}"));
-                    });
+            let conn_name = match tab.selected_connection_name() {
+                Some(n) => n,
+                None => {
+                    tab.set_status("No connection selected");
                     return;
                 }
             };
 
-            let driver = DriverRegistry::create(&conn.driver);
-            let result = rt.block_on(async move {
-                driver.connect(&conn).await?;
-                let dbs = driver.list_databases().await?;
-                let mut out = Vec::with_capacity(dbs.len());
-                for db in dbs {
-                    let tables = driver.list_tables(&db).await.unwrap_or_default();
-                    out.push((db, tables));
-                }
-                let _ = driver.disconnect().await;
-                Ok::<Vec<(String, Vec<String>)>, String>(out)
-            });
-
-            let this2 = this.clone_refs();
-            glib::MainContext::default().invoke_local(move || match result {
-                Ok(tree) => this2.schema_tree.set_schema(&tree),
-                Err(err) => this2.schema_tree.set_error(&format!("Load schema failed: {err}")),
-            });
-        });
-    }
-
-    fn load_current_table_page(&self) {
-        let Some(active_id) = self.state.active_connection_id() else {
-            self.result_grid.set_error("No active connection");
-            return;
-        };
-
-        let st = self.data_state.lock().expect("state lock poisoned").clone();
-        let Some(table) = st.table.clone() else {
-            self.result_grid.set_error("Select a table from schema");
-            return;
-        };
-
-        let Some(mut conn) = self
-            .state
-            .list_connections()
-            .into_iter()
-            .find(|c| c.id == active_id)
-        else {
-            self.result_grid.set_error("Active connection not found");
-            return;
-        };
-
-        conn.password = crypto::load_password(&conn.id).unwrap_or_default();
-        if conn.password.is_empty() {
-            self.result_grid.set_error("Password missing for active connection");
-            return;
-        }
-
-        self.result_grid.set_loading();
-
-        let this = self.clone_refs();
-        glib::spawn_future_local(async move {
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(err) => {
-                    let this2 = this.clone_refs();
-                    glib::MainContext::default().invoke_local(move || {
-                        this2.result_grid.set_error(&format!("Runtime error: {err}"));
-                    });
+            let conn = match self.state.connections().iter().find(|c| c.name == conn_name) {
+                Some(c) => c.clone(),
+                None => {
+                    tab.set_status("Connection not found");
                     return;
                 }
             };
 
-            let driver = DriverRegistry::create(&conn.driver);
-            let offset = st.page * st.page_size;
-            let result = rt.block_on(async move {
-                driver.connect(&conn).await?;
-                let order_ref = st.order_by.as_ref().map(|(c, asc)| (c.as_str(), *asc));
-                let data = driver
-                    .fetch_table_data(&table, offset, st.page_size, order_ref)
-                    .await;
-                let _ = driver.disconnect().await;
-                let data = data?;
-                Ok::<crate::db::driver::QueryResult, String>(data)
-            });
+            tab.set_status("Running query...");
+            self.result_grid.set_loading();
 
-            let this2 = this.clone_refs();
-            glib::MainContext::default().invoke_local(move || match result {
-                Ok(data) => this2.result_grid.set_page_data(st.page, st.page_size, &data),
-                Err(err) => this2
-                    .result_grid
-                    .set_error(&format!("Load table data failed: {err}")),
-            });
-        });
-    }
-
-    fn export_current_csv(&self) {
-        let Some(csv) = self.result_grid.current_csv() else {
-            self.toast("No result set to export");
-            return;
-        };
-
-        let chooser = gtk::FileChooserNative::builder()
-            .title("Export CSV")
-            .transient_for(&self.window)
-            .accept_label("Save")
-            .cancel_label("Cancel")
-            .action(gtk::FileChooserAction::Save)
-            .build();
-        chooser.set_current_name("result.csv");
-
-        chooser.connect_response(move |d, resp| {
-            if resp == gtk::ResponseType::Accept {
-                if let Some(file) = d.file() {
-                    if let Some(path) = file.path() {
-                        let _ = std::fs::write(path, &csv);
+            let this2 = self.clone_refs();
+            glib::spawn_future_local(async move {
+                let password = this2.store.load_password(&conn.id).unwrap_or_default();
+                
+                if this2.state.active_connection_id().as_deref() != Some(&conn.id) {
+                    if let Err(e) = this2.state.connect(&conn, &password).await {
+                        if let Some(tab) = this2.current_query_tab() {
+                            tab.set_status(&format!("Connection failed: {}", e));
+                        }
+                        this2.result_grid.set_error(&format!("Connection failed: {}", e));
+                        return;
                     }
                 }
+
+                match this2.state.execute_query(&sql).await {
+                    Ok(result) => {
+                        if let Some(tab) = this2.current_query_tab() {
+                            tab.set_status(&format!(
+                                "{} rows in {} ms",
+                                result.rows.len(),
+                                result.execution_time_ms
+                            ));
+                        }
+                        this2.result_grid.set_page_data(0, 200, &result);
+                    }
+                    Err(e) => {
+                        if let Some(tab) = this2.current_query_tab() {
+                            tab.set_status(&format!("Error: {}", e));
+                        }
+                        this2.result_grid.set_error(&format!("Query error: {}", e));
+                    }
+                }
+            });
+        }
+    }
+
+    fn load_table_data(&self, database: &str, table: &str) {
+        if self.state.active_connection_id().is_none() {
+            self.result_grid.set_error("No active connection");
+            return;
+        }
+
+        let mut data_state = self.data_state.lock().expect("data state lock poisoned");
+        data_state._database = Some(database.to_string());
+        data_state.table = Some(table.to_string());
+        data_state.page = 0;
+        drop(data_state);
+
+        self.result_grid.set_loading();
+        self.status_label.set_text(&format!("Loading {}.{}...", database, table));
+
+        let db = database.to_string();
+        let tbl = table.to_string();
+        let this2 = self.clone_refs();
+
+        glib::spawn_future_local(async move {
+            let data_state = this2.data_state.lock().expect("data state lock poisoned");
+            let page = data_state.page;
+            let page_size = data_state.page_size;
+            let order_by = data_state.order_by.clone();
+            drop(data_state);
+
+            match this2.state.load_table_data(&db, &tbl, page, page_size, order_by).await {
+                Ok(result) => {
+                    this2.result_grid.set_page_data(page, page_size, &result);
+                    this2.status_label.set_text(&format!("Loaded {}.{}", db, tbl));
+                }
+                Err(e) => {
+                    this2.result_grid.set_error(&format!("Error loading table: {}", e));
+                    this2.status_label.set_text(&format!("Error: {}", e));
+                }
             }
-            d.destroy();
         });
-        chooser.show();
+    }
+
+    fn reload_table_data(&self) {
+        let data_state = self.data_state.lock().expect("data state lock poisoned");
+        if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
+            let db = db.clone();
+            let tbl = tbl.clone();
+            drop(data_state);
+            self.load_table_data(&db, &tbl);
+        }
+    }
+
+    fn prev_page(&self) {
+        let mut data_state = self.data_state.lock().expect("data state lock poisoned");
+        if data_state.page > 0 {
+            data_state.page -= 1;
+            if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
+                let db = db.clone();
+                let tbl = tbl.clone();
+                drop(data_state);
+                self.load_table_data(&db, &tbl);
+            }
+        }
+    }
+
+    fn next_page(&self) {
+        let mut data_state = self.data_state.lock().expect("data state lock poisoned");
+        data_state.page += 1;
+        if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
+            let db = db.clone();
+            let tbl = tbl.clone();
+            drop(data_state);
+            self.load_table_data(&db, &tbl);
+        }
+    }
+
+    fn apply_sort(&self) {
+        if let Some(sort) = self.result_grid.current_sort() {
+            let mut data_state = self.data_state.lock().expect("data state lock poisoned");
+            data_state.order_by = Some(sort);
+            data_state.page = 0;
+            if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
+                let db = db.clone();
+                let tbl = tbl.clone();
+                drop(data_state);
+                self.load_table_data(&db, &tbl);
+            }
+        }
+    }
+
+    fn export_csv(&self) {
+        if let Some(csv) = self.result_grid.current_csv() {
+            let chooser = gtk::FileChooserDialog::new(
+                Some("Export CSV"),
+                Some(&self.window),
+                gtk::FileChooserAction::Save,
+                &[("Cancel", gtk::ResponseType::Cancel), ("Save", gtk::ResponseType::Accept)],
+            );
+            chooser.set_current_name("export.csv");
+
+            chooser.connect_response(move |d, response| {
+                if response == gtk::ResponseType::Accept {
+                    if let Some(file) = d.file() {
+                        if let Some(path) = file.path() {
+                            let _ = std::fs::write(path, &csv);
+                        }
+                    }
+                }
+                d.destroy();
+            });
+            chooser.show();
+        }
     }
 
     fn show_preferences_dialog(&self) {
@@ -749,7 +748,6 @@ impl MainWindow {
             "Ctrl+W: Close query tab",
             "Ctrl+Enter: Run query",
             "Ctrl+R: Refresh schema",
-            "Ctrl+Shift+C: New connection",
             "F5: Reload table data",
             "F1: Show shortcuts",
         ] {
@@ -774,6 +772,11 @@ impl MainWindow {
             window: self.window.clone(),
             state: self.state.clone(),
             store: ConnectionStore::from_path(self.store.path().clone()),
+            header_bar: AppHeaderBar {
+                header: self.header_bar.header.clone(),
+                new_tab_button: self.header_bar.new_tab_button.clone(),
+                menu_button: self.header_bar.menu_button.clone(),
+            },
             panel: ConnectionPanel {
                 root: self.panel.root.clone(),
                 list: self.panel.list.clone(),
@@ -784,10 +787,11 @@ impl MainWindow {
                 disconnect_button: self.panel.disconnect_button.clone(),
             },
             schema_tree: self.schema_tree.clone(),
-            tab_stack: self.tab_stack.clone(),
+            notebook: self.notebook.clone(),
             tabs: self.tabs.clone(),
-            active_tab: self.active_tab.clone(),
             result_grid: self.result_grid.clone(),
+            status_bar: self.status_bar.clone(),
+            status_label: self.status_label.clone(),
             data_state: self.data_state.clone(),
         }
     }

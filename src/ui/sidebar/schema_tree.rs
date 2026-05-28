@@ -1,11 +1,13 @@
 use gtk::prelude::*;
+use gtk::glib;
 use gtk4 as gtk;
 
 #[derive(Clone)]
 pub struct SchemaTree {
     pub root: gtk::Box,
     pub refresh_button: gtk::Button,
-    list: gtk::ListBox,
+    tree_view: gtk::TreeView,
+    tree_store: gtk::TreeStore,
     title: gtk::Label,
 }
 
@@ -24,24 +26,60 @@ impl SchemaTree {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
             .build();
+        
         let title = gtk::Label::builder()
             .label("Schema")
             .hexpand(true)
             .halign(gtk::Align::Start)
             .build();
-        let refresh_button = gtk::Button::with_label("Refresh");
+        title.add_css_class("heading");
+        
+        let refresh_button = gtk::Button::builder()
+            .icon_name("view-refresh-symbolic")
+            .tooltip_text("Refresh Schema (Ctrl+R)")
+            .build();
+        
         header.append(&title);
         header.append(&refresh_button);
         root.append(&header);
 
-        let list = gtk::ListBox::new();
-        list.set_vexpand(true);
-        root.append(&list);
+        let tree_store = gtk::TreeStore::new(&[
+            glib::Type::STRING,
+            glib::Type::STRING,
+            glib::Type::STRING,
+            glib::Type::STRING,
+        ]);
+
+        let tree_view = gtk::TreeView::builder()
+            .model(&tree_store)
+            .headers_visible(false)
+            .enable_tree_lines(true)
+            .build();
+
+        let column = gtk::TreeViewColumn::new();
+        
+        let icon_renderer = gtk::CellRendererPixbuf::new();
+        column.pack_start(&icon_renderer, false);
+        column.add_attribute(&icon_renderer, "icon-name", 0);
+        
+        let text_renderer = gtk::CellRendererText::new();
+        column.pack_start(&text_renderer, true);
+        column.add_attribute(&text_renderer, "text", 1);
+        
+        tree_view.append_column(&column);
+
+        let scrolled = gtk::ScrolledWindow::builder()
+            .vexpand(true)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .build();
+        scrolled.set_child(Some(&tree_view));
+        root.append(&scrolled);
 
         Self {
             root,
             refresh_button,
-            list,
+            tree_view,
+            tree_store,
             title,
         }
     }
@@ -50,12 +88,15 @@ impl SchemaTree {
     where
         F: Fn(String, String) + 'static,
     {
-        self.list.connect_row_activated(move |_, row| {
-            let key = row.widget_name();
-            if let Some(payload) = key.strip_prefix("table:") {
-                let mut parts = payload.splitn(2, '|');
-                if let (Some(db), Some(table)) = (parts.next(), parts.next()) {
-                    f(db.to_string(), table.to_string());
+        self.tree_view.connect_row_activated(move |tree_view, path, _column| {
+            if let Some(model) = tree_view.model() {
+                if let Some(iter) = model.iter(path) {
+                    let item_type: String = model.get(&iter, 2);
+                    if item_type == "table" {
+                        let db: String = model.get(&iter, 3);
+                        let table: String = model.get(&iter, 1);
+                        f(db, table);
+                    }
                 }
             }
         });
@@ -66,75 +107,71 @@ impl SchemaTree {
     }
 
     pub fn set_loading(&self, text: &str) {
-        self.clear();
-        let row = gtk::ListBoxRow::new();
-        row.set_selectable(false);
-
-        let box_row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(8)
-            .margin_top(6)
-            .margin_bottom(6)
-            .margin_start(6)
-            .margin_end(6)
-            .build();
-        let spinner = gtk::Spinner::new();
-        spinner.start();
-        let label = gtk::Label::builder().label(text).halign(gtk::Align::Start).build();
-        box_row.append(&spinner);
-        box_row.append(&label);
-
-        row.set_child(Some(&box_row));
-        self.list.append(&row);
+        self.tree_store.clear();
+        let iter = self.tree_store.append(None);
+        self.tree_store.set(&iter, &[
+            (0, &"emblem-synchronizing-symbolic"),
+            (1, &text),
+            (2, &"loading"),
+            (3, &""),
+        ]);
     }
 
     pub fn set_error(&self, text: &str) {
-        self.clear();
-        self.append_row(text, 0, None);
+        self.tree_store.clear();
+        let iter = self.tree_store.append(None);
+        self.tree_store.set(&iter, &[
+            (0, &"dialog-error-symbolic"),
+            (1, &text),
+            (2, &"error"),
+            (3, &""),
+        ]);
     }
 
     pub fn set_empty(&self) {
-        self.clear();
-        self.append_row("No active connection", 0, None);
+        self.tree_store.clear();
+        let iter = self.tree_store.append(None);
+        self.tree_store.set(&iter, &[
+            (0, &"network-offline-symbolic"),
+            (1, &"No active connection"),
+            (2, &"empty"),
+            (3, &""),
+        ]);
     }
 
     pub fn set_schema(&self, databases: &[(String, Vec<String>)]) {
-        self.clear();
+        self.tree_store.clear();
+        
         for (db, tables) in databases {
-            self.append_row(&format!("▾ {db}"), 0, None);
-            for table in tables {
-                self.append_row(
-                    &format!("• {table}"),
-                    1,
-                    Some(format!("table:{}|{}", db, table)),
-                );
-            }
+            let db_iter = self.tree_store.append(None);
+            self.tree_store.set(&db_iter, &[
+                (0, &"folder-symbolic"),
+                (1, &db.as_str()),
+                (2, &"database"),
+                (3, &db.as_str()),
+            ]);
+
             if tables.is_empty() {
-                self.append_row("(no tables)", 1, None);
+                let empty_iter = self.tree_store.append(Some(&db_iter));
+                self.tree_store.set(&empty_iter, &[
+                    (0, &""),
+                    (1, &"(no tables)"),
+                    (2, &"empty"),
+                    (3, &db.as_str()),
+                ]);
+            } else {
+                for table in tables {
+                    let table_iter = self.tree_store.append(Some(&db_iter));
+                    self.tree_store.set(&table_iter, &[
+                        (0, &"view-list-symbolic"),
+                        (1, &table.as_str()),
+                        (2, &"table"),
+                        (3, &db.as_str()),
+                    ]);
+                }
             }
         }
-    }
 
-    fn append_row(&self, text: &str, level: i32, key: Option<String>) {
-        let row = gtk::ListBoxRow::new();
-        row.set_selectable(key.is_some());
-        if let Some(key) = key {
-            row.set_widget_name(&key);
-        }
-        let label = gtk::Label::builder()
-            .label(text)
-            .halign(gtk::Align::Start)
-            .margin_start(8 + level * 20)
-            .margin_top(4)
-            .margin_bottom(4)
-            .build();
-        row.set_child(Some(&label));
-        self.list.append(&row);
-    }
-
-    fn clear(&self) {
-        while let Some(child) = self.list.first_child() {
-            self.list.remove(&child);
-        }
+        self.tree_view.expand_all();
     }
 }
