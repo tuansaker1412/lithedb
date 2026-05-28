@@ -2,6 +2,8 @@
 name = "table-pro-linux"
 version = "0.1.0"
 edition = "2021"
+description = "A modern, native Linux database client built with Rust, GTK4, and libadwaita"
+license = "MIT"
 
 [dependencies]
 gtk4 = "0.7"
@@ -22,3 +24,38 @@ env_logger = "0.11"
 hex = "0.4"
 sha2 = "0.10"
 rand = "0.8"
+
+[package.metadata.deb]
+maintainer = "Table Pro Linux <contact@tableprolinux.org>"
+copyright = "2026, Table Pro Linux Contributors"
+license-file = ["LICENSE", "4"]
+extended-description = """\
+A modern, native Linux database client built with Rust, GTK4, and libadwaita.
+Supports PostgreSQL, MySQL, and SQLite with features including:
+- SQL editor with syntax highlighting
+- Result grid with pagination and CSV export
+- Secure connection management with keyring integration
+- Native GTK4/libadwaita interface"""
+depends = "$auto, libgtk-4-1, libadwaita-1-0, libgtksourceview-5-0"
+section = "database"
+priority = "optional"
+assets = [
+    ["target/release/table-pro-linux", "usr/bin/", "755"],
+    ["packaging/flatpak/org.tableprolinux.App.desktop", "usr/share/applications/", "644"],
+    ["packaging/flatpak/org.tableprolinux.App.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["packaging/flatpak/org.tableprolinux.App.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["README.md", "usr/share/doc/table-pro-linux/", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/table-pro-linux", dest = "/usr/bin/table-pro-linux", mode = "755" },
+    { source = "packaging/flatpak/org.tableprolinux.App.desktop", dest = "/usr/share/applications/org.tableprolinux.App.desktop", mode = "644" },
+    { source = "packaging/flatpak/org.tableprolinux.App.svg", dest = "/usr/share/icons/hicolor/scalable/apps/org.tableprolinux.App.svg", mode = "644" },
+    { source = "packaging/flatpak/org.tableprolinux.App.metainfo.xml", dest = "/usr/share/metainfo/org.tableprolinux.App.metainfo.xml", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/table-pro-linux/README.md", mode = "644" },
+]
+[package.metadata.generate-rpm.requires]
+gtk4 = "*"
+libadwaita = "*"
+gtksourceview5 = "*"

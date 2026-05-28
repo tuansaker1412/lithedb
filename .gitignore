@@ -49,3 +49,16 @@ connections.json
 *.db
 *.sqlite
 *.sqlite3
+
+# Debian package artifacts
+target/debian/
+*.deb
+
+# RPM package artifacts
+target/generate-rpm/
+*.rpm
+
+# Arch Linux package artifacts
+packaging/arch/*.pkg.tar.zst
+packaging/arch/pkg/
+packaging/arch/src/
