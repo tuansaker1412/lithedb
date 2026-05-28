@@ -1,3 +1,5 @@
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gtk::glib;
@@ -12,7 +14,6 @@ use crate::ui::editor::query_tab::QueryTab;
 use crate::ui::grid::result_grid::ResultGrid;
 use crate::ui::header_bar::AppHeaderBar;
 use crate::ui::sidebar::connection_panel::ConnectionPanel;
-use crate::ui::sidebar::schema_tree::SchemaTree;
 
 #[derive(Clone, Default)]
 struct DataViewState {
@@ -29,7 +30,6 @@ pub struct MainWindow {
     store: ConnectionStore,
     header_bar: AppHeaderBar,
     panel: ConnectionPanel,
-    schema_tree: SchemaTree,
     notebook: gtk::Notebook,
     tabs: Arc<Mutex<Vec<QueryTab>>>,
     result_grid: ResultGrid,
@@ -55,7 +55,6 @@ impl MainWindow {
 
         // Create main components
         let panel = ConnectionPanel::new();
-        let schema_tree = SchemaTree::new();
         let result_grid = ResultGrid::new();
 
         // Create notebook for query tabs
@@ -73,20 +72,12 @@ impl MainWindow {
             .position(300)
             .build();
 
-        // Create right side (schema + query/result)
-        let right = gtk::Paned::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .start_child(&schema_tree.root)
-            .end_child(&query_and_result)
-            .position(250)
-            .build();
-
-        // Create main layout (connection panel + right side)
+        // Create main layout (connection/schema panel + query/result)
         let main_paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Horizontal)
             .start_child(&panel.root)
-            .end_child(&right)
-            .position(280)
+            .end_child(&query_and_result)
+            .position(320)
             .build();
 
         // Create status bar
@@ -123,7 +114,6 @@ impl MainWindow {
             store,
             header_bar,
             panel,
-            schema_tree,
             notebook,
             tabs: Arc::new(Mutex::new(Vec::new())),
             result_grid,
@@ -308,23 +298,25 @@ impl MainWindow {
                 .connect_clicked(move |_| this2.disconnect_active());
         }
 
-        // Schema tree events
+        // Sidebar schema events
         {
             let this2 = self.clone_refs();
-            self.schema_tree.refresh_button.connect_clicked(move |_| {
+            self.panel.refresh_button.connect_clicked(move |_| {
                 this2.refresh_schema_tree();
             });
         }
         {
             let this2 = self.clone_refs();
-            self.schema_tree.connect_table_activated(move |db, table| {
-                this2.load_table_data(&db, &table);
-            });
+            self.panel
+                .connect_table_activated(move |connection_id, db, table| {
+                    this2.load_table_data_from_sidebar(&connection_id, &db, &table);
+                });
         }
         {
             let this2 = self.clone_refs();
-            self.schema_tree
-                .connect_database_expanded(move |db| this2.load_tables_for(&db));
+            self.panel.connect_database_expanded(move |connection_id, db| {
+                this2.load_tables_for(&connection_id, &db);
+            });
         }
 
         // Result grid pagination
@@ -474,6 +466,7 @@ impl MainWindow {
 
             this2.refresh_list();
             this2.refresh_query_connections();
+            this2.refresh_schema_tree();
         });
     }
 
@@ -486,6 +479,7 @@ impl MainWindow {
             }
             self.refresh_list();
             self.refresh_query_connections();
+            self.refresh_schema_tree();
         }
     }
 
@@ -532,9 +526,9 @@ impl MainWindow {
 
     fn refresh_schema_tree(&self) {
         if let Some(conn_id) = self.state.active_connection_id() {
-            if let Some(cfg) = self.state.get_connection(&conn_id) {
-                self.schema_tree.set_title(&format!("Schema: {}", cfg.name));
-                self.schema_tree.set_loading("Loading schema...");
+            if self.state.get_connection(&conn_id).is_some() {
+                self.panel
+                    .set_connection_loading(&conn_id, "Loading schema...");
 
                 let this2 = self.clone_refs();
                 glib::spawn_future_local(async move {
@@ -549,40 +543,56 @@ impl MainWindow {
                                 .map(|c| c.database.is_empty())
                                 .unwrap_or(false);
                             if browse_all {
-                                let dbs: Vec<String> = schema.into_iter().map(|(d, _)| d).collect();
-                                this2.schema_tree.set_databases(&dbs);
+                                let dbs: Vec<String> =
+                                    schema.into_iter().map(|(d, _)| d).collect();
+                                this2.panel.set_connection_databases(&conn_id, &dbs);
                             } else {
-                                this2.schema_tree.set_schema(&schema);
+                                this2.panel.set_connection_schema(&conn_id, &schema);
                             }
                         }
                         Err(e) => {
-                            this2.schema_tree.set_error(&format!("Error: {}", e));
+                            this2
+                                .panel
+                                .set_connection_error(&conn_id, &format!("Error: {}", e));
                         }
                     }
                 });
             }
         } else {
-            self.schema_tree.set_title("Schema");
-            self.schema_tree.set_empty();
+            self.refresh_list();
         }
     }
 
-    fn load_tables_for(&self, database: &str) {
-        self.schema_tree.set_tables_loading_for(database);
+    fn load_tables_for(&self, connection_id: &str, database: &str) {
+        if self.state.active_connection_id().as_deref() != Some(connection_id) {
+            self.toast("Connect to this connection before browsing tables");
+            return;
+        }
+
+        self.panel.set_tables_loading_for(connection_id, database);
         let this2 = self.clone_refs();
+        let conn_id = connection_id.to_string();
         let db = database.to_string();
         glib::spawn_future_local(async move {
             match this2.state.list_tables_for(&db).await {
                 Ok(tables) => {
-                    this2.schema_tree.set_tables_for(&db, &tables);
+                    this2.panel.set_tables_for(&conn_id, &db, &tables);
                 }
                 Err(e) => {
                     this2
-                        .schema_tree
-                        .set_tables_error_for(&db, &format!("Error: {}", e));
+                        .panel
+                        .set_tables_error_for(&conn_id, &db, &format!("Error: {}", e));
                 }
             }
         });
+    }
+
+    fn load_table_data_from_sidebar(&self, connection_id: &str, database: &str, table: &str) {
+        if self.state.active_connection_id().as_deref() != Some(connection_id) {
+            self.toast("Connect to this connection before opening a table");
+            return;
+        }
+        self.load_table_data(database, table);
     }
 
     fn run_query(&self) {
@@ -633,6 +643,8 @@ impl MainWindow {
                             .set_error(&format!("Connection failed: {}", e));
                         return;
                     }
+                    this2.refresh_list();
+                    this2.refresh_schema_tree();
                     this2.refresh_query_databases();
                 }
 
@@ -830,8 +842,17 @@ impl MainWindow {
             .margin_start(12)
             .margin_end(12)
             .build();
-        let follow_switch = gtk::Switch::builder().active(true).build();
-        let dark_switch = gtk::Switch::builder().active(false).build();
+        let style_manager = adw::StyleManager::default();
+        let current_scheme = style_manager.color_scheme();
+        let follow_switch = gtk::Switch::builder()
+            .active(matches!(current_scheme, adw::ColorScheme::Default))
+            .build();
+        let light_switch = gtk::Switch::builder()
+            .active(matches!(current_scheme, adw::ColorScheme::ForceLight))
+            .build();
+        let dark_switch = gtk::Switch::builder()
+            .active(matches!(current_scheme, adw::ColorScheme::ForceDark))
+            .build();
 
         let row1 = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -843,34 +864,87 @@ impl MainWindow {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
             .build();
-        row2.append(&gtk::Label::new(Some("Force dark mode")));
-        row2.append(&dark_switch);
+        row2.append(&gtk::Label::new(Some("Force light mode")));
+        row2.append(&light_switch);
+        let row3 = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
+            .build();
+        row3.append(&gtk::Label::new(Some("Force dark mode")));
+        row3.append(&dark_switch);
 
         boxv.append(&row1);
         boxv.append(&row2);
+        boxv.append(&row3);
         content.append(&boxv);
 
+        light_switch.set_sensitive(!follow_switch.is_active());
+        dark_switch.set_sensitive(!follow_switch.is_active());
+
         {
+            let light_switch = light_switch.clone();
             let dark_switch = dark_switch.clone();
             follow_switch.connect_active_notify(move |s| {
+                light_switch.set_sensitive(!s.is_active());
                 dark_switch.set_sensitive(!s.is_active());
             });
         }
 
-        follow_switch.connect_active_notify(move |s| {
-            let sm = adw::StyleManager::default();
-            if s.is_active() {
-                sm.set_color_scheme(adw::ColorScheme::Default);
-            }
-        });
-        dark_switch.connect_active_notify(move |s| {
-            let sm = adw::StyleManager::default();
-            if s.is_active() {
-                sm.set_color_scheme(adw::ColorScheme::ForceDark);
-            } else {
-                sm.set_color_scheme(adw::ColorScheme::ForceLight);
-            }
-        });
+        let updating = Rc::new(Cell::new(false));
+
+        {
+            let light_switch = light_switch.clone();
+            let dark_switch = dark_switch.clone();
+            let updating = updating.clone();
+            follow_switch.connect_active_notify(move |s| {
+                if updating.get() {
+                    return;
+                }
+                if s.is_active() {
+                    updating.set(true);
+                    light_switch.set_active(false);
+                    dark_switch.set_active(false);
+                    updating.set(false);
+                    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::Default);
+                }
+            });
+        }
+
+        {
+            let follow_switch = follow_switch.clone();
+            let dark_switch = dark_switch.clone();
+            let updating = updating.clone();
+            light_switch.connect_active_notify(move |s| {
+                if updating.get() {
+                    return;
+                }
+                if s.is_active() {
+                    updating.set(true);
+                    follow_switch.set_active(false);
+                    dark_switch.set_active(false);
+                    updating.set(false);
+                    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceLight);
+                }
+            });
+        }
+
+        {
+            let follow_switch = follow_switch.clone();
+            let light_switch = light_switch.clone();
+            let updating = updating.clone();
+            dark_switch.connect_active_notify(move |s| {
+                if updating.get() {
+                    return;
+                }
+                if s.is_active() {
+                    updating.set(true);
+                    follow_switch.set_active(false);
+                    light_switch.set_active(false);
+                    updating.set(false);
+                    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+                }
+            });
+        }
 
         dialog.connect_response(|d, _| d.close());
         dialog.present();
@@ -949,14 +1023,15 @@ impl MainWindow {
             },
             panel: ConnectionPanel {
                 root: self.panel.root.clone(),
-                list: self.panel.list.clone(),
                 add_button: self.panel.add_button.clone(),
                 edit_button: self.panel.edit_button.clone(),
                 delete_button: self.panel.delete_button.clone(),
                 connect_button: self.panel.connect_button.clone(),
                 disconnect_button: self.panel.disconnect_button.clone(),
+                refresh_button: self.panel.refresh_button.clone(),
+                tree_view: self.panel.tree_view.clone(),
+                tree_store: self.panel.tree_store.clone(),
             },
-            schema_tree: self.schema_tree.clone(),
             notebook: self.notebook.clone(),
             tabs: self.tabs.clone(),
             result_grid: self.result_grid.clone(),

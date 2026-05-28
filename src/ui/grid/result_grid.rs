@@ -1,10 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use gtk::gdk;
+use gtk::glib;
+use gtk::pango;
 use gtk::prelude::*;
 use gtk4 as gtk;
 
 use crate::db::driver::QueryResult;
+
+const MIN_COLUMN_WIDTH: i32 = 96;
+const MAX_COLUMN_WIDTH: i32 = 260;
+const CELL_WIDTH_CHARS: i32 = 32;
 
 #[derive(Clone)]
 pub struct ResultGrid {
@@ -211,41 +217,55 @@ impl ResultGrid {
             return;
         }
 
-        let grid = gtk::Grid::builder()
-            .column_spacing(12)
-            .row_spacing(4)
-            .margin_top(8)
-            .margin_bottom(8)
-            .margin_start(8)
-            .margin_end(8)
-            .build();
+        let column_types = vec![glib::Type::STRING; result.columns.len()];
+        let store = gtk::ListStore::new(&column_types);
 
-        for (i, col) in result.columns.iter().enumerate() {
-            let header = gtk::Label::builder()
-                .label(col)
-                .halign(gtk::Align::Start)
-                .build();
-            header.add_css_class("heading");
-            grid.attach(&header, i as i32, 0, 1, 1);
-        }
-
-        for (r_idx, row) in result.rows.iter().enumerate() {
-            for (c_idx, val) in row.iter().enumerate() {
-                let txt = val.clone().unwrap_or_else(|| "NULL".to_string());
-                let cell = gtk::Button::with_label(&txt);
-                cell.set_halign(gtk::Align::Start);
-                cell.set_has_frame(false);
-
-                let selected_row = self.selected_row.clone();
-                cell.connect_clicked(move |_| {
-                    *selected_row.lock().expect("row lock poisoned") = Some(r_idx);
-                });
-
-                grid.attach(&cell, c_idx as i32, (r_idx + 1) as i32, 1, 1);
+        for row in &result.rows {
+            let iter = store.append();
+            for column_index in 0..result.columns.len() {
+                let text = row
+                    .get(column_index)
+                    .and_then(|value| value.clone())
+                    .unwrap_or_else(|| "NULL".to_string());
+                store.set(&iter, &[(column_index as u32, &text)]);
             }
         }
 
-        self.content_box.append(&grid);
+        let table = gtk::TreeView::builder()
+            .model(&store)
+            .headers_visible(true)
+            .hexpand(true)
+            .vexpand(true)
+            .build();
+        table.selection().set_mode(gtk::SelectionMode::Single);
+
+        for (column_index, column_name) in result.columns.iter().enumerate() {
+            let renderer = gtk::CellRendererText::new();
+            renderer.set_ellipsize(pango::EllipsizeMode::End);
+            renderer.set_width_chars(CELL_WIDTH_CHARS);
+            renderer.set_max_width_chars(CELL_WIDTH_CHARS);
+
+            let column = gtk::TreeViewColumn::new();
+            column.set_title(column_name);
+            column.set_resizable(true);
+            column.set_sizing(gtk::TreeViewColumnSizing::Fixed);
+            column.set_fixed_width(Self::initial_column_width(column_name));
+            column.pack_start(&renderer, true);
+            column.add_attribute(&renderer, "text", column_index as i32);
+            table.append_column(&column);
+        }
+
+        let selected_row = self.selected_row.clone();
+        table.selection().connect_changed(move |selection| {
+            if let Some((model, iter)) = selection.selected() {
+                let path = model.path(&iter);
+                if let Some(index) = path.indices().first() {
+                    *selected_row.lock().expect("row lock poisoned") = Some(*index as usize);
+                }
+            }
+        });
+
+        self.content_box.append(&table);
 
         if result.rows.is_empty() {
             self.status_label
@@ -347,6 +367,11 @@ impl ResultGrid {
     fn csv_escape(input: String) -> String {
         let escaped = input.replace('"', "\"\"");
         format!("\"{}\"", escaped)
+    }
+
+    fn initial_column_width(column_name: &str) -> i32 {
+        let estimated = (column_name.chars().count() as i32 * 9) + 48;
+        estimated.clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH)
     }
 
     pub fn current_csv(&self) -> Option<String> {
