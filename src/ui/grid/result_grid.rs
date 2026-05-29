@@ -15,6 +15,7 @@ const CELL_WIDTH_CHARS: i32 = 32;
 #[derive(Clone)]
 pub struct ResultGrid {
     pub root: gtk::Box,
+    pub reload_button: gtk::Button,
     pub prev_button: gtk::Button,
     pub next_button: gtk::Button,
     pub apply_sort_button: gtk::Button,
@@ -46,6 +47,10 @@ impl ResultGrid {
             .spacing(8)
             .build();
 
+        let reload_button = gtk::Button::builder()
+            .icon_name("view-refresh-symbolic")
+            .tooltip_text("Reload from database (F5)")
+            .build();
         let prev_button = gtk::Button::builder()
             .icon_name("go-previous-symbolic")
             .tooltip_text("Previous Page")
@@ -92,6 +97,8 @@ impl ResultGrid {
             .hexpand(true)
             .build();
 
+        toolbar.append(&reload_button);
+        toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
         toolbar.append(&prev_button);
         toolbar.append(&next_button);
         toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
@@ -135,6 +142,7 @@ impl ResultGrid {
 
         Self {
             root,
+            reload_button,
             prev_button,
             next_button,
             apply_sort_button,
@@ -262,7 +270,13 @@ impl ResultGrid {
             renderer.set_max_width_chars(CELL_WIDTH_CHARS);
 
             let column = gtk::TreeViewColumn::new();
-            column.set_title(column_name);
+            let header_label = gtk::Label::builder()
+                .label(column_name)
+                .use_underline(false)
+                .xalign(0.0)
+                .build();
+            header_label.show();
+            column.set_widget(Some(&header_label));
             column.set_resizable(true);
             column.set_sizing(gtk::TreeViewColumnSizing::Fixed);
             column.set_fixed_width(Self::initial_column_width(column_name));

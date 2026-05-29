@@ -11,18 +11,9 @@ use crate::config::connection::{ConnectionConfig, ConnectionStore};
 use crate::state::app_state::AppState;
 use crate::ui::dialogs::connection_dialog::ConnectionDialog;
 use crate::ui::editor::query_tab::QueryTab;
-use crate::ui::grid::result_grid::ResultGrid;
+use crate::ui::grid::table_tab::{TableTab, TableTabKind};
 use crate::ui::header_bar::AppHeaderBar;
 use crate::ui::sidebar::connection_panel::ConnectionPanel;
-
-#[derive(Clone, Default)]
-struct DataViewState {
-    _database: Option<String>,
-    table: Option<String>,
-    page: u64,
-    page_size: u64,
-    order_by: Option<(String, bool)>,
-}
 
 pub struct MainWindow {
     window: gtk::ApplicationWindow,
@@ -32,11 +23,12 @@ pub struct MainWindow {
     panel: ConnectionPanel,
     notebook: gtk::Notebook,
     tabs: Arc<Mutex<Vec<QueryTab>>>,
-    result_grid: ResultGrid,
+    data_notebook: gtk::Notebook,
+    data_tabs: Arc<Mutex<Vec<TableTab>>>,
+    data_stack: gtk::Stack,
     query_and_result: gtk::Paned,
     status_bar: gtk::Box,
     status_label: gtk::Label,
-    data_state: Arc<Mutex<DataViewState>>,
 }
 
 impl MainWindow {
@@ -60,20 +52,44 @@ impl MainWindow {
 
         // Create main components
         let panel = ConnectionPanel::new();
-        let result_grid = ResultGrid::new();
 
-        // Create notebook for query tabs
+        // Notebook for query (SQL) tabs
         let notebook = gtk::Notebook::builder()
             .scrollable(true)
             .show_border(false)
             .vexpand(true)
             .build();
 
-        // Create query and result area
+        // Notebook for data (table / query result) tabs
+        let data_notebook = gtk::Notebook::builder()
+            .scrollable(true)
+            .show_border(false)
+            .vexpand(true)
+            .hexpand(true)
+            .build();
+
+        let data_placeholder = adw::StatusPage::builder()
+            .icon_name("view-list-symbolic")
+            .title("No table opened")
+            .description("Click a table in the sidebar to open it in a new tab.")
+            .vexpand(true)
+            .hexpand(true)
+            .build();
+
+        let data_stack = gtk::Stack::builder()
+            .transition_type(gtk::StackTransitionType::Crossfade)
+            .vexpand(true)
+            .hexpand(true)
+            .build();
+        data_stack.add_named(&data_placeholder, Some("placeholder"));
+        data_stack.add_named(&data_notebook, Some("tabs"));
+        data_stack.set_visible_child_name("placeholder");
+
+        // Vertical split: query editor (top) + data tabs (bottom)
         let query_and_result = gtk::Paned::builder()
             .orientation(gtk::Orientation::Vertical)
             .start_child(&notebook)
-            .end_child(&result_grid.root)
+            .end_child(&data_stack)
             .position(300)
             .resize_start_child(true)
             .resize_end_child(true)
@@ -135,17 +151,14 @@ impl MainWindow {
             panel,
             notebook,
             tabs: Arc::new(Mutex::new(Vec::new())),
-            result_grid,
+            data_notebook,
+            data_tabs: Arc::new(Mutex::new(Vec::new())),
+            data_stack,
             query_and_result,
             status_bar,
             status_label,
-            data_state: Arc::new(Mutex::new(DataViewState {
-                page_size: 200,
-                ..DataViewState::default()
-            })),
         };
 
-        this.result_grid.wire_copy_actions();
         this.wire_events();
         this.refresh_list();
         this.refresh_query_connections();
@@ -262,6 +275,181 @@ impl MainWindow {
         }
     }
 
+    fn update_data_visibility(&self) {
+        let count = self
+            .data_tabs
+            .lock()
+            .expect("data tabs lock poisoned")
+            .len();
+        if count == 0 {
+            self.data_stack.set_visible_child_name("placeholder");
+        } else {
+            self.data_stack.set_visible_child_name("tabs");
+        }
+    }
+
+    fn find_data_tab_index(&self, key: &str) -> Option<usize> {
+        self.data_tabs
+            .lock()
+            .expect("data tabs lock poisoned")
+            .iter()
+            .position(|t| t.key == key)
+    }
+
+    fn current_data_tab(&self) -> Option<TableTab> {
+        let page = self.data_notebook.current_page()?;
+        self.data_tabs
+            .lock()
+            .expect("data tabs lock poisoned")
+            .get(page as usize)
+            .cloned()
+    }
+
+    fn attach_data_tab(&self, tab: TableTab, focus: bool) {
+        let page_num = self
+            .data_notebook
+            .append_page(&tab.root, Some(&tab.label_box));
+        self.data_notebook.set_tab_reorderable(&tab.root, true);
+
+        let this2 = self.clone_refs();
+        let tab_root = tab.root.clone();
+        tab.close_button.connect_clicked(move |_| {
+            if let Some(page) = this2.data_notebook.page_num(&tab_root) {
+                this2.data_notebook.remove_page(Some(page));
+                let mut tabs = this2.data_tabs.lock().expect("data tabs lock poisoned");
+                if (page as usize) < tabs.len() {
+                    tabs.remove(page as usize);
+                }
+                drop(tabs);
+                this2.update_data_visibility();
+            }
+        });
+
+        let middle_click = gtk::GestureClick::builder().button(2).build();
+        let this2 = self.clone_refs();
+        let tab_root_mid = tab.root.clone();
+        middle_click.connect_pressed(move |gesture, _, _, _| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            if let Some(page) = this2.data_notebook.page_num(&tab_root_mid) {
+                this2.data_notebook.remove_page(Some(page));
+                let mut tabs = this2.data_tabs.lock().expect("data tabs lock poisoned");
+                if (page as usize) < tabs.len() {
+                    tabs.remove(page as usize);
+                }
+                drop(tabs);
+                this2.update_data_visibility();
+            }
+        });
+        tab.label_box.add_controller(middle_click);
+
+        let this2 = self.clone_refs();
+        let tab_for_reload = tab.clone();
+        tab.grid
+            .reload_button
+            .connect_clicked(move |_| match &tab_for_reload.kind {
+                TableTabKind::Table { .. } => this2.load_table_data_into_tab(&tab_for_reload),
+                TableTabKind::QueryResult => this2.run_query(),
+            });
+
+        let this2 = self.clone_refs();
+        let tab_for_prev = tab.clone();
+        tab.grid.prev_button.connect_clicked(move |_| {
+            this2.prev_page_for(&tab_for_prev);
+        });
+        let this2 = self.clone_refs();
+        let tab_for_next = tab.clone();
+        tab.grid.next_button.connect_clicked(move |_| {
+            this2.next_page_for(&tab_for_next);
+        });
+        let this2 = self.clone_refs();
+        let tab_for_sort = tab.clone();
+        tab.grid.apply_sort_button.connect_clicked(move |_| {
+            this2.apply_sort_for(&tab_for_sort);
+        });
+        let this2 = self.clone_refs();
+        tab.grid.export_csv_button.connect_clicked(move |_| {
+            this2.export_csv();
+        });
+
+        self.data_tabs
+            .lock()
+            .expect("data tabs lock poisoned")
+            .push(tab);
+        self.update_data_visibility();
+        if focus {
+            self.data_notebook.set_current_page(Some(page_num));
+        }
+    }
+
+    fn prev_page_for(&self, tab: &TableTab) {
+        if !matches!(tab.kind, TableTabKind::Table { .. }) {
+            return;
+        }
+        let mut st = tab.state.lock().expect("tab state lock poisoned");
+        if st.page > 0 {
+            st.page -= 1;
+            drop(st);
+            self.load_table_data_into_tab(tab);
+        }
+    }
+
+    fn next_page_for(&self, tab: &TableTab) {
+        if !matches!(tab.kind, TableTabKind::Table { .. }) {
+            return;
+        }
+        let mut st = tab.state.lock().expect("tab state lock poisoned");
+        st.page += 1;
+        drop(st);
+        self.load_table_data_into_tab(tab);
+    }
+
+    fn apply_sort_for(&self, tab: &TableTab) {
+        if !matches!(tab.kind, TableTabKind::Table { .. }) {
+            return;
+        }
+        if let Some(sort) = tab.grid.current_sort() {
+            let mut st = tab.state.lock().expect("tab state lock poisoned");
+            st.order_by = Some(sort);
+            st.page = 0;
+            drop(st);
+            self.load_table_data_into_tab(tab);
+        }
+    }
+
+    fn close_data_tabs_for_connection(&self, connection_id: &str) {
+        let to_remove: Vec<u32> = {
+            let tabs = self.data_tabs.lock().expect("data tabs lock poisoned");
+            tabs.iter()
+                .enumerate()
+                .filter_map(|(i, t)| match &t.kind {
+                    TableTabKind::Table {
+                        connection_id: cid, ..
+                    } if cid == connection_id => Some(i as u32),
+                    _ => None,
+                })
+                .collect()
+        };
+        for idx in to_remove.iter().rev() {
+            self.data_notebook.remove_page(Some(*idx));
+            let mut tabs = self.data_tabs.lock().expect("data tabs lock poisoned");
+            if (*idx as usize) < tabs.len() {
+                tabs.remove(*idx as usize);
+            }
+        }
+        self.update_data_visibility();
+    }
+
+    fn focus_or_open_query_result_tab(&self) -> TableTab {
+        let key = TableTab::key_for_query_result();
+        if let Some(idx) = self.find_data_tab_index(&key) {
+            self.data_notebook.set_current_page(Some(idx as u32));
+            return self.data_tabs.lock().expect("data tabs lock poisoned")[idx].clone();
+        }
+        let tab = TableTab::new_query_result(200);
+        self.attach_data_tab(tab.clone(), true);
+        tab
+    }
+
     fn refresh_query_databases(&self) {
         let current = self.state.current_pool_database().unwrap_or_default();
         let this2 = self.clone_refs();
@@ -299,6 +487,62 @@ impl MainWindow {
             self.header_bar.new_tab_button.connect_clicked(move |_| {
                 this2.create_query_tab();
             });
+        }
+
+        // Data notebook: switch-page updates status bar with detail label
+        {
+            let this2 = self.clone_refs();
+            self.data_notebook
+                .connect_switch_page(move |_, _, page_num| {
+                    let label = this2
+                        .data_tabs
+                        .lock()
+                        .expect("data tabs lock poisoned")
+                        .get(page_num as usize)
+                        .map(|t| t.detail_label());
+                    if let Some(text) = label {
+                        this2.status_label.set_text(&text);
+                    }
+                });
+        }
+
+        // Data notebook: horizontal scroll switches active tab
+        {
+            let scroll = gtk::EventControllerScroll::new(
+                gtk::EventControllerScrollFlags::HORIZONTAL
+                    | gtk::EventControllerScrollFlags::DISCRETE,
+            );
+            let this2 = self.clone_refs();
+            scroll.connect_scroll(move |_, dx, dy| {
+                let delta = if dx.abs() >= dy.abs() { dx } else { dy };
+                if delta == 0.0 {
+                    return glib::Propagation::Proceed;
+                }
+                let count = this2
+                    .data_tabs
+                    .lock()
+                    .expect("data tabs lock poisoned")
+                    .len() as i32;
+                if count <= 1 {
+                    return glib::Propagation::Proceed;
+                }
+                let current = this2
+                    .data_notebook
+                    .current_page()
+                    .map(|p| p as i32)
+                    .unwrap_or(0);
+                let next = if delta > 0.0 {
+                    current + 1
+                } else {
+                    current - 1
+                };
+                let clamped = next.clamp(0, count - 1);
+                if clamped != current {
+                    this2.data_notebook.set_current_page(Some(clamped as u32));
+                }
+                glib::Propagation::Stop
+            });
+            self.data_notebook.add_controller(scroll);
         }
 
         // Setup actions
@@ -356,35 +600,10 @@ impl MainWindow {
         }
         {
             let this2 = self.clone_refs();
-            self.panel.connect_database_expanded(move |connection_id, db| {
-                this2.load_tables_for(&connection_id, &db);
-            });
-        }
-
-        // Result grid pagination
-        {
-            let this2 = self.clone_refs();
-            self.result_grid
-                .prev_button
-                .connect_clicked(move |_| this2.prev_page());
-        }
-        {
-            let this2 = self.clone_refs();
-            self.result_grid
-                .next_button
-                .connect_clicked(move |_| this2.next_page());
-        }
-        {
-            let this2 = self.clone_refs();
-            self.result_grid
-                .apply_sort_button
-                .connect_clicked(move |_| this2.apply_sort());
-        }
-        {
-            let this2 = self.clone_refs();
-            self.result_grid
-                .export_csv_button
-                .connect_clicked(move |_| this2.export_csv());
+            self.panel
+                .connect_database_expanded(move |connection_id, db| {
+                    this2.load_tables_for(&connection_id, &db);
+                });
         }
 
         // Keyboard shortcuts
@@ -473,7 +692,7 @@ impl MainWindow {
                     _ => {}
                 }
             } else if key == gtk::gdk::Key::F5 {
-                this2.reload_table_data();
+                this2.reload_active_data_tab();
                 return true.into();
             } else if key == gtk::gdk::Key::F1 {
                 this2.show_shortcuts_window();
@@ -555,6 +774,7 @@ impl MainWindow {
     }
 
     fn disconnect_active(&self) {
+        let prev_id = self.state.active_connection_id();
         let this2 = self.clone_refs();
         glib::spawn_future_local(async move {
             this2.state.disconnect().await;
@@ -562,7 +782,9 @@ impl MainWindow {
             this2.refresh_list();
             this2.refresh_schema_tree();
             this2.refresh_query_databases();
-            this2.result_grid.clear();
+            if let Some(id) = prev_id {
+                this2.close_data_tabs_for_connection(&id);
+            }
         });
     }
 
@@ -585,8 +807,7 @@ impl MainWindow {
                                 .map(|c| c.database.is_empty())
                                 .unwrap_or(false);
                             if browse_all {
-                                let dbs: Vec<String> =
-                                    schema.into_iter().map(|(d, _)| d).collect();
+                                let dbs: Vec<String> = schema.into_iter().map(|(d, _)| d).collect();
                                 this2.panel.set_connection_databases(&conn_id, &dbs);
                             } else {
                                 this2.panel.set_connection_schema(&conn_id, &schema);
@@ -634,7 +855,7 @@ impl MainWindow {
             self.toast("Connect to this connection before opening a table");
             return;
         }
-        self.load_table_data(database, table);
+        self.focus_or_open_table_tab(connection_id, database, table);
     }
 
     fn run_query(&self) {
@@ -669,9 +890,11 @@ impl MainWindow {
             let target_db = tab.selected_database_name();
 
             tab.set_status("Running query...");
-            self.result_grid.set_loading();
+            let result_tab = self.focus_or_open_query_result_tab();
+            result_tab.grid.set_loading();
 
             let this2 = self.clone_refs();
+            let result_tab2 = result_tab.clone();
             glib::spawn_future_local(async move {
                 let password = this2.store.load_password(&conn.id).unwrap_or_default();
 
@@ -680,8 +903,8 @@ impl MainWindow {
                         if let Some(tab) = this2.current_query_tab() {
                             tab.set_status(&format!("Connection failed: {}", e));
                         }
-                        this2
-                            .result_grid
+                        result_tab2
+                            .grid
                             .set_error(&format!("Connection failed: {}", e));
                         return;
                     }
@@ -697,8 +920,8 @@ impl MainWindow {
                             if let Some(tab) = this2.current_query_tab() {
                                 tab.set_status(&format!("Failed to switch database: {}", e));
                             }
-                            this2
-                                .result_grid
+                            result_tab2
+                                .grid
                                 .set_error(&format!("Failed to switch database: {}", e));
                             return;
                         }
@@ -715,54 +938,67 @@ impl MainWindow {
                                 result.execution_time_ms
                             ));
                         }
-                        this2.result_grid.set_page_data(0, 200, &result);
+                        result_tab2.grid.set_page_data(0, 200, &result);
                     }
                     Err(e) => {
                         if let Some(tab) = this2.current_query_tab() {
                             tab.set_status(&format!("Error: {}", e));
                         }
-                        this2.result_grid.set_error(&format!("Query error: {}", e));
+                        result_tab2.grid.set_error(&format!("Query error: {}", e));
                     }
                 }
             });
         }
     }
 
-    fn load_table_data(&self, database: &str, table: &str) {
-        if self.state.active_connection_id().is_none() {
-            self.result_grid.set_error("No active connection");
+    fn focus_or_open_table_tab(&self, connection_id: &str, database: &str, table: &str) {
+        let key = TableTab::key_for_table(connection_id, database, table);
+        if let Some(idx) = self.find_data_tab_index(&key) {
+            self.data_notebook.set_current_page(Some(idx as u32));
+            let _tab = self.data_tabs.lock().expect("data tabs lock poisoned")[idx].clone();
+            self.status_label.set_text(&format!(
+                "Showing cached results for {}.{} (use reload to refresh)",
+                database, table
+            ));
             return;
         }
 
-        let mut data_state = self.data_state.lock().expect("data state lock poisoned");
-        data_state._database = Some(database.to_string());
-        data_state.table = Some(table.to_string());
-        data_state.page = 0;
-        drop(data_state);
+        let page_size = 200u64;
+        let tab = TableTab::new_table(connection_id, database, table, page_size);
+        self.attach_data_tab(tab.clone(), true);
+        self.load_table_data_into_tab(&tab);
+    }
 
-        self.result_grid.set_loading();
+    fn load_table_data_into_tab(&self, tab: &TableTab) {
+        let (db, tbl) = match &tab.kind {
+            TableTabKind::Table {
+                database, table, ..
+            } => (database.clone(), table.clone()),
+            TableTabKind::QueryResult => return,
+        };
+
+        if self.state.active_connection_id().is_none() {
+            tab.grid.set_error("No active connection");
+            return;
+        }
+
+        tab.grid.set_loading();
         self.status_label
-            .set_text(&format!("Loading {}.{}...", database, table));
+            .set_text(&format!("Loading {}.{}...", db, tbl));
 
-        let db = database.to_string();
-        let tbl = table.to_string();
         let this2 = self.clone_refs();
-
+        let tab_clone = tab.clone();
         glib::spawn_future_local(async move {
             let (page, page_size, order_by) = {
-                let data_state = this2.data_state.lock().expect("data state lock poisoned");
-                (
-                    data_state.page,
-                    data_state.page_size,
-                    data_state.order_by.clone(),
-                )
+                let st = tab_clone.state.lock().expect("tab state lock poisoned");
+                (st.page, st.page_size, st.order_by.clone())
             };
 
             if !db.is_empty() && this2.state.current_pool_database().as_deref() != Some(db.as_str())
             {
                 if let Err(e) = this2.state.use_database(&db).await {
-                    this2
-                        .result_grid
+                    tab_clone
+                        .grid
                         .set_error(&format!("Failed to switch database: {}", e));
                     this2.status_label.set_text(&format!("Error: {}", e));
                     return;
@@ -776,14 +1012,14 @@ impl MainWindow {
                 .await
             {
                 Ok(result) => {
-                    this2.result_grid.set_page_data(page, page_size, &result);
+                    tab_clone.grid.set_page_data(page, page_size, &result);
                     this2
                         .status_label
                         .set_text(&format!("Loaded {}.{}", db, tbl));
                 }
                 Err(e) => {
-                    this2
-                        .result_grid
+                    tab_clone
+                        .grid
                         .set_error(&format!("Error loading table: {}", e));
                     this2.status_label.set_text(&format!("Error: {}", e));
                 }
@@ -791,79 +1027,41 @@ impl MainWindow {
         });
     }
 
-    fn reload_table_data(&self) {
-        let data_state = self.data_state.lock().expect("data state lock poisoned");
-        if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
-            let db = db.clone();
-            let tbl = tbl.clone();
-            drop(data_state);
-            self.load_table_data(&db, &tbl);
-        }
-    }
-
-    fn prev_page(&self) {
-        let mut data_state = self.data_state.lock().expect("data state lock poisoned");
-        if data_state.page > 0 {
-            data_state.page -= 1;
-            if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
-                let db = db.clone();
-                let tbl = tbl.clone();
-                drop(data_state);
-                self.load_table_data(&db, &tbl);
-            }
-        }
-    }
-
-    fn next_page(&self) {
-        let mut data_state = self.data_state.lock().expect("data state lock poisoned");
-        data_state.page += 1;
-        if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
-            let db = db.clone();
-            let tbl = tbl.clone();
-            drop(data_state);
-            self.load_table_data(&db, &tbl);
-        }
-    }
-
-    fn apply_sort(&self) {
-        if let Some(sort) = self.result_grid.current_sort() {
-            let mut data_state = self.data_state.lock().expect("data state lock poisoned");
-            data_state.order_by = Some(sort);
-            data_state.page = 0;
-            if let (Some(db), Some(tbl)) = (&data_state._database, &data_state.table) {
-                let db = db.clone();
-                let tbl = tbl.clone();
-                drop(data_state);
-                self.load_table_data(&db, &tbl);
+    fn reload_active_data_tab(&self) {
+        if let Some(tab) = self.current_data_tab() {
+            match &tab.kind {
+                TableTabKind::Table { .. } => self.load_table_data_into_tab(&tab),
+                TableTabKind::QueryResult => self.run_query(),
             }
         }
     }
 
     fn export_csv(&self) {
-        if let Some(csv) = self.result_grid.current_csv() {
-            let chooser = gtk::FileChooserDialog::new(
-                Some("Export CSV"),
-                Some(&self.window),
-                gtk::FileChooserAction::Save,
-                &[
-                    ("Cancel", gtk::ResponseType::Cancel),
-                    ("Save", gtk::ResponseType::Accept),
-                ],
-            );
-            chooser.set_current_name("export.csv");
-
-            chooser.connect_response(move |d, response| {
-                if response == gtk::ResponseType::Accept {
-                    if let Some(file) = d.file() {
-                        if let Some(path) = file.path() {
-                            let _ = std::fs::write(path, &csv);
-                        }
+        let csv = match self.current_data_tab().and_then(|t| t.grid.current_csv()) {
+            Some(c) => c,
+            None => return,
+        };
+        let chooser = gtk::FileChooserDialog::new(
+            Some("Export CSV"),
+            Some(&self.window),
+            gtk::FileChooserAction::Save,
+            &[
+                ("Cancel", gtk::ResponseType::Cancel),
+                ("Save", gtk::ResponseType::Accept),
+            ],
+        );
+        chooser.set_current_name("export.csv");
+        chooser.connect_response(move |d, response| {
+            if response == gtk::ResponseType::Accept {
+                if let Some(file) = d.file() {
+                    if let Some(path) = file.path() {
+                        let _ = std::fs::write(path, &csv);
                     }
                 }
-                d.destroy();
-            });
-            chooser.show();
-        }
+            }
+            d.destroy();
+        });
+        chooser.show();
     }
 
     fn show_preferences_dialog(&self) {
@@ -1077,11 +1275,12 @@ impl MainWindow {
             },
             notebook: self.notebook.clone(),
             tabs: self.tabs.clone(),
-            result_grid: self.result_grid.clone(),
+            data_notebook: self.data_notebook.clone(),
+            data_tabs: self.data_tabs.clone(),
+            data_stack: self.data_stack.clone(),
             query_and_result: self.query_and_result.clone(),
             status_bar: self.status_bar.clone(),
             status_label: self.status_label.clone(),
-            data_state: self.data_state.clone(),
         }
     }
 }

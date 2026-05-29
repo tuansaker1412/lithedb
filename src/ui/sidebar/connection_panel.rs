@@ -200,15 +200,7 @@ impl ConnectionPanel {
             } else {
                 format!("{} ({driver_label})", conn.name)
             };
-            self.set_row(
-                &iter,
-                icon_name,
-                &label,
-                "connection",
-                &conn.id,
-                "",
-                "",
-            );
+            self.set_row(&iter, icon_name, &label, "connection", &conn.id, "", "");
 
             if is_active {
                 let child = self.tree_store.append(Some(&iter));
@@ -291,11 +283,7 @@ impl ConnectionPanel {
         }
     }
 
-    pub fn set_connection_schema(
-        &self,
-        connection_id: &str,
-        databases: &[(String, Vec<String>)],
-    ) {
+    pub fn set_connection_schema(&self, connection_id: &str, databases: &[(String, Vec<String>)]) {
         if let Some(parent) = self.find_connection_iter(connection_id) {
             self.clear_children(&parent);
 
@@ -575,9 +563,7 @@ impl ConnectionPanel {
     }
 
     fn save_scroll(&self) -> f64 {
-        self.scrolled
-            .vadjustment()
-            .value()
+        self.scrolled.vadjustment().value()
     }
 
     fn restore_scroll(&self, value: f64) {
