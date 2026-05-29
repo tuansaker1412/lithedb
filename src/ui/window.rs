@@ -371,6 +371,24 @@ impl MainWindow {
             this2.export_csv();
         });
 
+        if let Some(structure) = &tab.structure {
+            let this2 = self.clone_refs();
+            let tab_for_struct = tab.clone();
+            structure.reload_button.connect_clicked(move |_| {
+                this2.load_table_structure_into_tab(&tab_for_struct, true);
+            });
+        }
+
+        if let Some(inner_stack) = &tab.inner_stack {
+            let this2 = self.clone_refs();
+            let tab_for_switch = tab.clone();
+            inner_stack.connect_visible_child_name_notify(move |stack| {
+                if stack.visible_child_name().as_deref() == Some("structure") {
+                    this2.load_table_structure_into_tab(&tab_for_switch, false);
+                }
+            });
+        }
+
         self.data_tabs
             .lock()
             .expect("data tabs lock poisoned")
@@ -1024,6 +1042,65 @@ impl MainWindow {
                     this2.status_label.set_text(&format!("Error: {}", e));
                 }
             }
+        });
+    }
+
+    fn load_table_structure_into_tab(&self, tab: &TableTab, force: bool) {
+        let (db, tbl) = match &tab.kind {
+            TableTabKind::Table {
+                database, table, ..
+            } => (database.clone(), table.clone()),
+            TableTabKind::QueryResult => return,
+        };
+
+        let structure = match &tab.structure {
+            Some(s) => s.clone(),
+            None => return,
+        };
+
+        if !force {
+            let loaded = tab
+                .structure_loaded
+                .lock()
+                .expect("structure loaded lock poisoned");
+            if *loaded {
+                return;
+            }
+        }
+
+        if self.state.active_connection_id().is_none() {
+            structure.set_error("No active connection");
+            return;
+        }
+
+        structure.set_loading();
+
+        let this2 = self.clone_refs();
+        let tab_clone = tab.clone();
+        glib::spawn_future_local(async move {
+            let columns = match this2.state.list_columns(&db, &tbl).await {
+                Ok(c) => c,
+                Err(e) => {
+                    structure.set_error(&format!("Error loading structure: {}", e));
+                    return;
+                }
+            };
+            let foreign_keys = this2
+                .state
+                .list_foreign_keys(&db, &tbl)
+                .await
+                .unwrap_or_default();
+            let indexes = this2
+                .state
+                .list_indexes(&db, &tbl)
+                .await
+                .unwrap_or_default();
+
+            structure.set_structure(&columns, &foreign_keys, &indexes);
+            *tab_clone
+                .structure_loaded
+                .lock()
+                .expect("structure loaded lock poisoned") = true;
         });
     }
 

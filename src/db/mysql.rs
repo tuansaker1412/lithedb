@@ -6,7 +6,9 @@ use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlSslMode};
 use sqlx::{Column, MySqlPool, Row, TypeInfo};
 use tokio::sync::Mutex;
 
-use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
+use super::driver::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
+};
 
 #[derive(Default)]
 pub struct MySqlDriver {
@@ -198,7 +200,12 @@ impl DatabaseDriver for MySqlDriver {
         let pool = self.get_pool().await?;
         let rows = sqlx::query(
             r#"
-            SELECT column_name, data_type, is_nullable='YES' AS nullable, column_key='PRI' AS is_primary_key
+            SELECT
+                column_name,
+                column_type,
+                is_nullable='YES' AS nullable,
+                column_key='PRI' AS is_primary_key,
+                extra LIKE '%auto_increment%' AS auto_increment
             FROM information_schema.columns
             WHERE table_schema = ? AND table_name = ?
             ORDER BY ordinal_position
@@ -217,8 +224,85 @@ impl DatabaseDriver for MySqlDriver {
                 data_type: r.try_get::<String, _>(1).unwrap_or_default(),
                 nullable: r.try_get::<bool, _>(2).unwrap_or(false),
                 is_primary_key: r.try_get::<bool, _>(3).unwrap_or(false),
+                auto_increment: r.try_get::<bool, _>(4).unwrap_or(false),
             })
             .collect())
+    }
+
+    async fn list_foreign_keys(
+        &self,
+        database: &str,
+        table: &str,
+    ) -> Result<Vec<ForeignKeyInfo>, String> {
+        let pool = self.get_pool().await?;
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                constraint_name,
+                column_name,
+                referenced_table_name,
+                referenced_column_name
+            FROM information_schema.key_column_usage
+            WHERE table_schema = ?
+              AND table_name = ?
+              AND referenced_table_name IS NOT NULL
+            ORDER BY constraint_name, ordinal_position
+            "#,
+        )
+        .bind(database)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(rows
+            .iter()
+            .map(|r| ForeignKeyInfo {
+                name: r.try_get::<String, _>(0).unwrap_or_default(),
+                column: r.try_get::<String, _>(1).unwrap_or_default(),
+                referenced_table: r.try_get::<String, _>(2).unwrap_or_default(),
+                referenced_column: r.try_get::<String, _>(3).unwrap_or_default(),
+            })
+            .collect())
+    }
+
+    async fn list_indexes(&self, database: &str, table: &str) -> Result<Vec<IndexInfo>, String> {
+        let pool = self.get_pool().await?;
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                index_name,
+                non_unique,
+                column_name,
+                seq_in_index
+            FROM information_schema.statistics
+            WHERE table_schema = ?
+              AND table_name = ?
+            ORDER BY index_name, seq_in_index
+            "#,
+        )
+        .bind(database)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let mut indexes: Vec<IndexInfo> = Vec::new();
+        for r in rows.iter() {
+            let name = r.try_get::<String, _>(0).unwrap_or_default();
+            let non_unique = r.try_get::<i64, _>(1).unwrap_or(1);
+            let column = r.try_get::<String, _>(2).unwrap_or_default();
+            match indexes.iter_mut().find(|ix| ix.name == name) {
+                Some(ix) => ix.columns.push(column),
+                None => indexes.push(IndexInfo {
+                    name: name.clone(),
+                    columns: vec![column],
+                    unique: non_unique == 0,
+                    primary: name == "PRIMARY",
+                }),
+            }
+        }
+        Ok(indexes)
     }
 
     async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {

@@ -6,7 +6,9 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
 use sqlx::{Column, PgPool, Row, TypeInfo};
 use tokio::sync::Mutex;
 
-use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
+use super::driver::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
+};
 
 #[derive(Default)]
 pub struct PostgresDriver {
@@ -205,20 +207,20 @@ impl DatabaseDriver for PostgresDriver {
             r#"
             SELECT
                 c.column_name,
-                c.data_type,
+                pg_catalog.format_type(att.atttypid, att.atttypmod) AS full_type,
                 (c.is_nullable = 'YES') AS nullable,
                 EXISTS (
                     SELECT 1
                     FROM pg_constraint con
-                    JOIN pg_class rel ON rel.oid = con.conrelid
-                    JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-                    JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = ANY(con.conkey)
                     WHERE con.contype = 'p'
-                      AND nsp.nspname = c.table_schema
-                      AND rel.relname = c.table_name
-                      AND att.attname = c.column_name
-                ) AS is_primary_key
+                      AND con.conrelid = rel.oid
+                      AND att.attnum = ANY(con.conkey)
+                ) AS is_primary_key,
+                (c.is_identity = 'YES' OR c.column_default LIKE 'nextval(%') AS auto_increment
             FROM information_schema.columns c
+            JOIN pg_namespace nsp ON nsp.nspname = c.table_schema
+            JOIN pg_class rel ON rel.relname = c.table_name AND rel.relnamespace = nsp.oid
+            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attname = c.column_name
             WHERE c.table_catalog=$1 AND c.table_schema='public' AND c.table_name=$2
             ORDER BY c.ordinal_position
             "#,
@@ -236,6 +238,89 @@ impl DatabaseDriver for PostgresDriver {
                 data_type: r.try_get::<String, _>(1).unwrap_or_default(),
                 nullable: r.try_get::<bool, _>(2).unwrap_or(false),
                 is_primary_key: r.try_get::<bool, _>(3).unwrap_or(false),
+                auto_increment: r.try_get::<bool, _>(4).unwrap_or(false),
+            })
+            .collect())
+    }
+
+    async fn list_foreign_keys(
+        &self,
+        database: &str,
+        table: &str,
+    ) -> Result<Vec<ForeignKeyInfo>, String> {
+        let _ = database;
+        let pool = self.get_pool().await?;
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                con.conname AS name,
+                att.attname AS column_name,
+                ref_rel.relname AS referenced_table,
+                ref_att.attname AS referenced_column
+            FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+            JOIN unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE
+            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = k.attnum
+            JOIN pg_class ref_rel ON ref_rel.oid = con.confrelid
+            JOIN unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord) ON fk.ord = k.ord
+            JOIN pg_attribute ref_att ON ref_att.attrelid = ref_rel.oid AND ref_att.attnum = fk.attnum
+            WHERE con.contype = 'f'
+              AND nsp.nspname = 'public'
+              AND rel.relname = $1
+            ORDER BY con.conname, k.ord
+            "#,
+        )
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(rows
+            .iter()
+            .map(|r| ForeignKeyInfo {
+                name: r.try_get::<String, _>(0).unwrap_or_default(),
+                column: r.try_get::<String, _>(1).unwrap_or_default(),
+                referenced_table: r.try_get::<String, _>(2).unwrap_or_default(),
+                referenced_column: r.try_get::<String, _>(3).unwrap_or_default(),
+            })
+            .collect())
+    }
+
+    async fn list_indexes(&self, database: &str, table: &str) -> Result<Vec<IndexInfo>, String> {
+        let _ = database;
+        let pool = self.get_pool().await?;
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                ic.relname AS name,
+                bool_or(ix.indisunique) AS is_unique,
+                bool_or(ix.indisprimary) AS is_primary,
+                array_agg(att.attname ORDER BY k.ord) AS columns
+            FROM pg_index ix
+            JOIN pg_class ic ON ic.oid = ix.indexrelid
+            JOIN pg_class tc ON tc.oid = ix.indrelid
+            JOIN pg_namespace nsp ON nsp.oid = tc.relnamespace
+            JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE
+            JOIN pg_attribute att ON att.attrelid = tc.oid AND att.attnum = k.attnum
+            WHERE nsp.nspname = 'public'
+              AND tc.relname = $1
+            GROUP BY ic.relname
+            ORDER BY ic.relname
+            "#,
+        )
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(rows
+            .iter()
+            .map(|r| IndexInfo {
+                name: r.try_get::<String, _>(0).unwrap_or_default(),
+                unique: r.try_get::<bool, _>(1).unwrap_or(false),
+                primary: r.try_get::<bool, _>(2).unwrap_or(false),
+                columns: r.try_get::<Vec<String>, _>(3).unwrap_or_default(),
             })
             .collect())
     }

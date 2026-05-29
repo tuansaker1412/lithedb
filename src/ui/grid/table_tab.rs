@@ -4,6 +4,7 @@ use gtk::prelude::*;
 use gtk4 as gtk;
 
 use crate::ui::grid::result_grid::ResultGrid;
+use crate::ui::grid::structure_view::StructureView;
 
 #[derive(Clone, Debug)]
 pub enum TableTabKind {
@@ -38,6 +39,9 @@ pub struct TableTab {
     pub key: String,
     pub kind: TableTabKind,
     pub grid: ResultGrid,
+    pub structure: Option<StructureView>,
+    pub inner_stack: Option<gtk::Stack>,
+    pub structure_loaded: Arc<Mutex<bool>>,
     pub label_box: gtk::Box,
     pub close_button: gtk::Button,
     pub state: Arc<Mutex<DataViewState>>,
@@ -109,18 +113,58 @@ impl TableTab {
             .hexpand(true)
             .vexpand(true)
             .build();
+
         let detail_label = gtk::Label::builder()
             .label(tooltip)
             .halign(gtk::Align::Start)
-            .margin_top(6)
-            .margin_bottom(2)
-            .margin_start(10)
-            .margin_end(10)
+            .hexpand(true)
             .build();
         detail_label.add_css_class("dim-label");
         detail_label.add_css_class("caption");
-        root.append(&detail_label);
-        root.append(&grid.root);
+
+        let is_table = matches!(kind, TableTabKind::Table { .. });
+
+        let (structure, inner_stack) = if is_table {
+            let structure = StructureView::new();
+
+            let stack = gtk::Stack::builder()
+                .transition_type(gtk::StackTransitionType::Crossfade)
+                .hexpand(true)
+                .vexpand(true)
+                .build();
+            stack.add_titled(&grid.root, Some("data"), "Data");
+            stack.add_titled(&structure.root, Some("structure"), "Structure");
+            stack.set_visible_child_name("data");
+
+            let switcher = gtk::StackSwitcher::builder()
+                .stack(&stack)
+                .halign(gtk::Align::End)
+                .build();
+
+            let header_box = gtk::Box::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .spacing(8)
+                .margin_top(6)
+                .margin_bottom(2)
+                .margin_start(10)
+                .margin_end(10)
+                .build();
+            header_box.append(&detail_label);
+            header_box.append(&switcher);
+
+            root.append(&header_box);
+            root.append(&stack);
+
+            (Some(structure), Some(stack))
+        } else {
+            detail_label.set_margin_top(6);
+            detail_label.set_margin_bottom(2);
+            detail_label.set_margin_start(10);
+            detail_label.set_margin_end(10);
+            root.append(&detail_label);
+            root.append(&grid.root);
+            (None, None)
+        };
 
         let label_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -147,6 +191,9 @@ impl TableTab {
             key,
             kind,
             grid,
+            structure,
+            inner_stack,
+            structure_loaded: Arc::new(Mutex::new(false)),
             label_box,
             close_button,
             state: Arc::new(Mutex::new(DataViewState::new(page_size))),

@@ -248,4 +248,61 @@ impl AppState {
         .await
         .map_err(|e| format!("join error: {e}"))?
     }
+
+    pub async fn list_columns(
+        &self,
+        database: &str,
+        table: &str,
+    ) -> Result<Vec<crate::db::driver::ColumnInfo>, String> {
+        let (driver, config) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let database = if database.is_empty() {
+            config.database.clone()
+        } else {
+            database.to_string()
+        };
+        let table = table.to_string();
+        spawn_tokio(async move { driver.list_columns(&database, &table).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn list_foreign_keys(
+        &self,
+        database: &str,
+        table: &str,
+    ) -> Result<Vec<crate::db::driver::ForeignKeyInfo>, String> {
+        let (driver, config) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let database = if database.is_empty() {
+            config.database.clone()
+        } else {
+            database.to_string()
+        };
+        let table = table.to_string();
+        spawn_tokio(async move { driver.list_foreign_keys(&database, &table).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn list_indexes(
+        &self,
+        database: &str,
+        table: &str,
+    ) -> Result<Vec<crate::db::driver::IndexInfo>, String> {
+        let (driver, config) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let database = if database.is_empty() {
+            config.database.clone()
+        } else {
+            database.to_string()
+        };
+        let table = table.to_string();
+        spawn_tokio(async move { driver.list_indexes(&database, &table).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
 }

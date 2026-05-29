@@ -7,7 +7,9 @@ use sqlx::{Column, Row, SqlitePool, TypeInfo};
 use std::str::FromStr;
 use tokio::sync::Mutex;
 
-use super::driver::{ColumnInfo, ConnectionConfig, DatabaseDriver, QueryResult};
+use super::driver::{
+    ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
+};
 
 #[derive(Default)]
 pub struct SqliteDriver {
@@ -155,13 +157,83 @@ impl DatabaseDriver for SqliteDriver {
 
         Ok(rows
             .iter()
-            .map(|r| ColumnInfo {
-                name: r.try_get::<String, _>(1).unwrap_or_default(),
-                data_type: r.try_get::<String, _>(2).unwrap_or_default(),
-                nullable: r.try_get::<i64, _>(3).map(|v| v == 0).unwrap_or(false),
-                is_primary_key: r.try_get::<i64, _>(5).map(|v| v > 0).unwrap_or(false),
+            .map(|r| {
+                let data_type = r.try_get::<String, _>(2).unwrap_or_default();
+                let is_primary_key = r.try_get::<i64, _>(5).map(|v| v > 0).unwrap_or(false);
+                let auto_increment =
+                    is_primary_key && data_type.trim().eq_ignore_ascii_case("integer");
+                ColumnInfo {
+                    name: r.try_get::<String, _>(1).unwrap_or_default(),
+                    data_type,
+                    nullable: r.try_get::<i64, _>(3).map(|v| v == 0).unwrap_or(false),
+                    is_primary_key,
+                    auto_increment,
+                }
             })
             .collect())
+    }
+
+    async fn list_foreign_keys(
+        &self,
+        _database: &str,
+        table: &str,
+    ) -> Result<Vec<ForeignKeyInfo>, String> {
+        let pool = self.get_pool().await?;
+        let sql = format!("PRAGMA foreign_key_list({})", Self::quote_ident(table));
+        let rows = sqlx::query(&sql)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok(rows
+            .iter()
+            .map(|r| {
+                let id = r.try_get::<i64, _>(0).unwrap_or_default();
+                let column = r.try_get::<String, _>(3).unwrap_or_default();
+                let referenced_table = r.try_get::<String, _>(2).unwrap_or_default();
+                let referenced_column = r.try_get::<String, _>(4).unwrap_or_default();
+                ForeignKeyInfo {
+                    name: format!("fk_{}_{}", table, id),
+                    column,
+                    referenced_table,
+                    referenced_column,
+                }
+            })
+            .collect())
+    }
+
+    async fn list_indexes(&self, _database: &str, table: &str) -> Result<Vec<IndexInfo>, String> {
+        let pool = self.get_pool().await?;
+        let list_sql = format!("PRAGMA index_list({})", Self::quote_ident(table));
+        let index_rows = sqlx::query(&list_sql)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let mut indexes: Vec<IndexInfo> = Vec::new();
+        for r in index_rows.iter() {
+            let name = r.try_get::<String, _>(1).unwrap_or_default();
+            let unique = r.try_get::<i64, _>(2).map(|v| v != 0).unwrap_or(false);
+            let origin = r.try_get::<String, _>(3).unwrap_or_default();
+
+            let info_sql = format!("PRAGMA index_info({})", Self::quote_ident(&name));
+            let col_rows = sqlx::query(&info_sql)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+            let columns = col_rows
+                .iter()
+                .filter_map(|c| c.try_get::<String, _>(2).ok())
+                .collect();
+
+            indexes.push(IndexInfo {
+                name,
+                columns,
+                unique,
+                primary: origin == "pk",
+            });
+        }
+        Ok(indexes)
     }
 
     async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {

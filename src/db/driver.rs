@@ -8,6 +8,23 @@ pub struct ColumnInfo {
     pub data_type: String,
     pub nullable: bool,
     pub is_primary_key: bool,
+    pub auto_increment: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForeignKeyInfo {
+    pub name: String,
+    pub column: String,
+    pub referenced_table: String,
+    pub referenced_column: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexInfo {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+    pub primary: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +43,12 @@ pub trait DatabaseDriver: Send + Sync {
     async fn list_databases(&self) -> Result<Vec<String>, String>;
     async fn list_tables(&self, database: &str) -> Result<Vec<String>, String>;
     async fn list_columns(&self, database: &str, table: &str) -> Result<Vec<ColumnInfo>, String>;
+    async fn list_foreign_keys(
+        &self,
+        database: &str,
+        table: &str,
+    ) -> Result<Vec<ForeignKeyInfo>, String>;
+    async fn list_indexes(&self, database: &str, table: &str) -> Result<Vec<IndexInfo>, String>;
     async fn execute_query(&self, sql: &str) -> Result<QueryResult, String>;
     async fn fetch_table_data(
         &self,
