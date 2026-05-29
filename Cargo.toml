@@ -1,6 +1,6 @@
 [package]
 name = "table-pro-linux"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A modern, native Linux database client built with Rust, GTK4, and libadwaita"
 license = "MIT"

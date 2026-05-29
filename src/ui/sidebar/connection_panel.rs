@@ -22,6 +22,7 @@ pub struct ConnectionPanel {
     pub refresh_button: gtk::Button,
     pub(crate) tree_view: gtk::TreeView,
     pub(crate) tree_store: gtk::TreeStore,
+    pub(crate) scrolled: gtk::ScrolledWindow,
 }
 
 impl ConnectionPanel {
@@ -149,6 +150,7 @@ impl ConnectionPanel {
             refresh_button,
             tree_view,
             tree_store,
+            scrolled,
         }
     }
 
@@ -401,6 +403,7 @@ impl ConnectionPanel {
 
     pub fn set_tables_loading_for(&self, connection_id: &str, database: &str) {
         if let Some(parent) = self.find_database_iter(connection_id, database) {
+            let v = self.save_scroll();
             self.clear_children(&parent);
             let iter = self.tree_store.append(Some(&parent));
             self.set_row(
@@ -414,11 +417,13 @@ impl ConnectionPanel {
             );
             let path = self.tree_store.path(&parent);
             self.tree_view.expand_row(&path, false);
+            self.restore_scroll(v);
         }
     }
 
     pub fn set_tables_for(&self, connection_id: &str, database: &str, tables: &[String]) {
         if let Some(parent) = self.find_database_iter(connection_id, database) {
+            let v = self.save_scroll();
             self.clear_children(&parent);
             if tables.is_empty() {
                 let iter = self.tree_store.append(Some(&parent));
@@ -447,11 +452,13 @@ impl ConnectionPanel {
             }
             let path = self.tree_store.path(&parent);
             self.tree_view.expand_row(&path, false);
+            self.restore_scroll(v);
         }
     }
 
     pub fn set_tables_error_for(&self, connection_id: &str, database: &str, error: &str) {
         if let Some(parent) = self.find_database_iter(connection_id, database) {
+            let v = self.save_scroll();
             self.clear_children(&parent);
             let iter = self.tree_store.append(Some(&parent));
             self.set_row(
@@ -463,6 +470,7 @@ impl ConnectionPanel {
                 database,
                 "",
             );
+            self.restore_scroll(v);
         }
     }
 
@@ -564,5 +572,20 @@ impl ConnectionPanel {
         while let Some(child) = self.tree_store.iter_children(Some(parent)) {
             self.tree_store.remove(&child);
         }
+    }
+
+    fn save_scroll(&self) -> f64 {
+        self.scrolled
+            .vadjustment()
+            .value()
+    }
+
+    fn restore_scroll(&self, value: f64) {
+        let scrolled = self.scrolled.clone();
+        glib::idle_add_local_once(move || {
+            let adj = scrolled.vadjustment();
+            let max = (adj.upper() - adj.page_size()).max(0.0);
+            adj.set_value(value.clamp(0.0, max));
+        });
     }
 }

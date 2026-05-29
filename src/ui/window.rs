@@ -25,7 +25,7 @@ struct DataViewState {
 }
 
 pub struct MainWindow {
-    window: adw::ApplicationWindow,
+    window: gtk::ApplicationWindow,
     state: AppState,
     store: ConnectionStore,
     header_bar: AppHeaderBar,
@@ -44,11 +44,15 @@ impl MainWindow {
         let store = ConnectionStore::new().expect("failed to initialize connection store");
         let state = AppState::new(store.load().unwrap_or_default());
 
-        let window = adw::ApplicationWindow::builder()
+        let window = gtk::ApplicationWindow::builder()
             .application(app)
             .title("Table Pro Linux")
             .default_width(1200)
             .default_height(800)
+            .width_request(720)
+            .height_request(480)
+            .resizable(true)
+            .decorated(true)
             .build();
 
         // Create header bar
@@ -113,13 +117,15 @@ impl MainWindow {
         // Create main content with header + body + status bar
         let content_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
+            .hexpand(true)
+            .vexpand(true)
             .build();
-        content_box.append(&header_bar.header);
         content_box.append(&main_paned);
         content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         content_box.append(&status_bar);
 
-        window.set_content(Some(&content_box));
+        window.set_titlebar(Some(&header_bar.header));
+        window.set_child(Some(&content_box));
 
         let this = Self {
             window,
@@ -1067,6 +1073,7 @@ impl MainWindow {
                 refresh_button: self.panel.refresh_button.clone(),
                 tree_view: self.panel.tree_view.clone(),
                 tree_store: self.panel.tree_store.clone(),
+                scrolled: self.panel.scrolled.clone(),
             },
             notebook: self.notebook.clone(),
             tabs: self.tabs.clone(),
