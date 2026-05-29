@@ -950,13 +950,21 @@ impl MainWindow {
                 match this2.state.execute_query(&sql).await {
                     Ok(result) => {
                         if let Some(tab) = this2.current_query_tab() {
+                            let note = if result.truncated {
+                                format!(" (limited to first {} rows)", result.rows.len())
+                            } else {
+                                String::new()
+                            };
                             tab.set_status(&format!(
-                                "{} rows in {} ms",
+                                "{} rows in {} ms{}",
                                 result.rows.len(),
-                                result.execution_time_ms
+                                result.execution_time_ms,
+                                note
                             ));
                         }
-                        result_tab2.grid.set_page_data(0, 200, &result);
+                        result_tab2
+                            .grid
+                            .set_page_data(0, 200, std::sync::Arc::new(result));
                     }
                     Err(e) => {
                         if let Some(tab) = this2.current_query_tab() {
@@ -1030,7 +1038,9 @@ impl MainWindow {
                 .await
             {
                 Ok(result) => {
-                    tab_clone.grid.set_page_data(page, page_size, &result);
+                    tab_clone
+                        .grid
+                        .set_page_data(page, page_size, std::sync::Arc::new(result));
                     this2
                         .status_label
                         .set_text(&format!("Loaded {}.{}", db, tbl));

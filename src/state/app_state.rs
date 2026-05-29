@@ -150,9 +150,24 @@ impl AppState {
     }
 
     pub async fn list_schema(&self) -> Result<Vec<(String, Vec<String>)>, String> {
-        let (driver, config) = self
-            .active_driver()
-            .ok_or_else(|| "not connected".to_string())?;
+        let (driver, config, configured_database) = {
+            let guard = self.inner.lock().expect("state lock poisoned");
+            let driver = guard.active_driver.clone();
+            let config = guard.active_config.clone();
+            let configured_database = guard
+                .active_connection_id
+                .as_ref()
+                .and_then(|id| guard.connections.iter().find(|c| &c.id == id))
+                .map(|c| c.database.clone())
+                .or_else(|| config.as_ref().map(|c| c.database.clone()));
+            (driver, config, configured_database)
+        };
+        let (driver, config) = match (driver, config) {
+            (Some(driver), Some(config)) => (driver, config),
+            _ => return Err("not connected".to_string()),
+        };
+        let configured_database = configured_database.unwrap_or_default();
+
         if matches!(config.driver, crate::config::connection::DriverType::SQLite) {
             let tables = spawn_tokio(async move { driver.list_tables("main").await })
                 .await
@@ -160,18 +175,18 @@ impl AppState {
             return Ok(vec![("main".to_string(), tables)]);
         }
 
-        if config.database.is_empty() {
+        if configured_database.is_empty() {
             let dbs = spawn_tokio(async move { driver.list_databases().await })
                 .await
                 .map_err(|e| format!("join error: {e}"))??;
             return Ok(dbs.into_iter().map(|d| (d, Vec::new())).collect());
         }
 
-        let database = config.database.clone();
+        let database = configured_database.clone();
         let tables = spawn_tokio(async move { driver.list_tables(&database).await })
             .await
             .map_err(|e| format!("join error: {e}"))??;
-        Ok(vec![(config.database.clone(), tables)])
+        Ok(vec![(configured_database, tables)])
     }
 
     pub async fn list_tables_for(&self, database: &str) -> Result<Vec<String>, String> {

@@ -33,6 +33,7 @@ pub struct QueryResult {
     pub rows: Vec<Vec<Option<String>>>,
     pub rows_affected: u64,
     pub execution_time_ms: u128,
+    pub truncated: bool,
 }
 
 #[async_trait]

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use futures_util::TryStreamExt;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Column, Row, SqlitePool, TypeInfo};
 use std::str::FromStr;
@@ -10,6 +11,7 @@ use tokio::sync::Mutex;
 use super::driver::{
     ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
 };
+use crate::config::settings;
 
 #[derive(Default)]
 pub struct SqliteDriver {
@@ -239,34 +241,50 @@ impl DatabaseDriver for SqliteDriver {
     async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
         let pool = self.get_pool().await?;
         let start = Instant::now();
-        match sqlx::query(sql).fetch_all(&pool).await {
-            Ok(rows) => {
-                let execution_time_ms = start.elapsed().as_millis();
-                let columns = rows
-                    .first()
-                    .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
-                    .unwrap_or_default();
-                let mapped_rows = rows.iter().map(Self::row_to_strings).collect::<Vec<_>>();
-                Ok(QueryResult {
-                    columns,
-                    rows: mapped_rows.clone(),
-                    rows_affected: mapped_rows.len() as u64,
-                    execution_time_ms,
-                })
-            }
-            Err(_) => {
-                let done = sqlx::query(sql)
-                    .execute(&pool)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                Ok(QueryResult {
-                    columns: Vec::new(),
-                    rows: Vec::new(),
-                    rows_affected: done.rows_affected(),
-                    execution_time_ms: start.elapsed().as_millis(),
-                })
+        let max_rows = settings::max_query_rows();
+        let mut stream = sqlx::query(sql).fetch(&pool);
+        let mut columns: Vec<String> = Vec::new();
+        let mut rows: Vec<Vec<Option<String>>> = Vec::new();
+        let mut truncated = false;
+
+        loop {
+            match stream.try_next().await {
+                Ok(Some(row)) => {
+                    if columns.is_empty() {
+                        columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                    }
+                    if rows.len() as u64 >= max_rows {
+                        truncated = true;
+                        break;
+                    }
+                    rows.push(Self::row_to_strings(&row));
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    drop(stream);
+                    let done = sqlx::query(sql)
+                        .execute(&pool)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    return Ok(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        rows_affected: done.rows_affected(),
+                        execution_time_ms: start.elapsed().as_millis(),
+                        truncated: false,
+                    });
+                }
             }
         }
+
+        let rows_affected = rows.len() as u64;
+        Ok(QueryResult {
+            columns,
+            rows,
+            rows_affected,
+            execution_time_ms: start.elapsed().as_millis(),
+            truncated,
+        })
     }
 
     async fn fetch_table_data(

@@ -126,6 +126,32 @@ src/
 └── config/             # Connection storage and encryption
 ```
 
+## Configuration
+
+The maximum number of rows loaded into memory for a manual SQL query is configurable to protect low-spec machines from large result sets. Browsing tables is paginated separately and is not affected.
+
+Resolution order (highest priority first):
+
+1. Environment variable `TABLE_PRO_MAX_QUERY_ROWS` (positive integer)
+2. `~/.config/table-pro-linux/settings.json` field `max_query_rows`
+3. Default: `1000`
+
+Example `settings.json`:
+
+```json
+{
+  "max_query_rows": 5000
+}
+```
+
+Example via environment variable:
+
+```bash
+TABLE_PRO_MAX_QUERY_ROWS=5000 cargo run --release
+```
+
+When a query exceeds the cap, the result grid shows a "limited to first N rows" note.
+
 ## Security
 
 - **No Plaintext Passwords**: Credentials are never stored in plaintext

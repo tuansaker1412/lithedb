@@ -27,7 +27,7 @@ pub struct ResultGrid {
     sort_column_entry: gtk::Entry,
     status_label: gtk::Label,
     content_box: gtk::Box,
-    last_result: Arc<Mutex<Option<QueryResult>>>,
+    last_result: Arc<Mutex<Option<Arc<QueryResult>>>>,
     selected_row: Arc<Mutex<Option<usize>>>,
 }
 
@@ -221,11 +221,11 @@ impl ResultGrid {
         }
     }
 
-    pub fn set_page_data(&self, page: u64, page_size: u64, result: &QueryResult) {
+    pub fn set_page_data(&self, page: u64, page_size: u64, result: Arc<QueryResult>) {
         while let Some(child) = self.content_box.first_child() {
             self.content_box.remove(&child);
         }
-        *self.last_result.lock().expect("result lock poisoned") = Some(result.clone());
+        *self.last_result.lock().expect("result lock poisoned") = Some(Arc::clone(&result));
         *self.selected_row.lock().expect("row lock poisoned") = None;
 
         self.prev_button.set_sensitive(page > 0);
@@ -303,12 +303,18 @@ impl ResultGrid {
         } else {
             let start = page * page_size + 1;
             let end = page * page_size + result.rows.len() as u64;
+            let truncated_note = if result.truncated {
+                format!(" | limited to first {} rows", result.rows.len())
+            } else {
+                String::new()
+            };
             self.status_label.set_text(&format!(
-                "Showing rows {}-{} | {} rows | {} ms",
+                "Showing rows {}-{} | {} rows | {} ms{}",
                 start,
                 end,
                 result.rows.len(),
-                result.execution_time_ms
+                result.execution_time_ms,
+                truncated_note
             ));
         }
     }
@@ -421,10 +427,10 @@ impl ResultGrid {
             );
             out.push('\n');
         }
-        for row in res.rows {
+        for row in &res.rows {
             out.push_str(
-                &row.into_iter()
-                    .map(|v| Self::csv_escape(v.unwrap_or_default()))
+                &row.iter()
+                    .map(|v| Self::csv_escape(v.clone().unwrap_or_default()))
                     .collect::<Vec<_>>()
                     .join(","),
             );
