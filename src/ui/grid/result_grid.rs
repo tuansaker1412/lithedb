@@ -61,7 +61,8 @@ impl ResultGrid {
             .build();
         let sort_asc_switch = gtk::Switch::builder()
             .active(true)
-            .tooltip_text("Ascending")
+            .tooltip_text("Toggle sort direction (ASC / DESC)")
+            .valign(gtk::Align::Center)
             .build();
         let apply_sort_button = gtk::Button::builder()
             .label("Sort")
@@ -95,8 +96,23 @@ impl ResultGrid {
         toolbar.append(&next_button);
         toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
         toolbar.append(&sort_column_entry);
-        toolbar.append(&gtk::Label::new(Some("Asc")));
-        toolbar.append(&sort_asc_switch);
+        let sort_dir_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(6)
+            .valign(gtk::Align::Center)
+            .build();
+        let sort_dir_label = gtk::Label::builder().label("ASC").build();
+        sort_dir_label.add_css_class("dim-label");
+        sort_dir_label.add_css_class("caption-heading");
+        sort_dir_box.append(&sort_dir_label);
+        sort_dir_box.append(&sort_asc_switch);
+        toolbar.append(&sort_dir_box);
+        {
+            let label = sort_dir_label.clone();
+            sort_asc_switch.connect_active_notify(move |s| {
+                label.set_label(if s.is_active() { "ASC" } else { "DESC" });
+            });
+        }
         toolbar.append(&apply_sort_button);
         toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
         toolbar.append(&copy_cell_button);

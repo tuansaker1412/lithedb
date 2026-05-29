@@ -1,4 +1,5 @@
 use gtk::glib;
+use gtk::pango;
 use gtk::prelude::*;
 use gtk4 as gtk;
 
@@ -32,7 +33,8 @@ impl ConnectionPanel {
             .margin_bottom(8)
             .margin_start(8)
             .margin_end(8)
-            .width_request(320)
+            .width_request(260)
+            .hexpand(false)
             .build();
 
         let header = gtk::Box::builder()
@@ -109,16 +111,21 @@ impl ConnectionPanel {
             .model(&tree_store)
             .headers_visible(false)
             .enable_tree_lines(true)
+            .tooltip_column(COL_LABEL as i32)
             .build();
         tree_view.selection().set_mode(gtk::SelectionMode::Single);
 
         let column = gtk::TreeViewColumn::new();
+        column.set_sizing(gtk::TreeViewColumnSizing::Autosize);
+        column.set_expand(true);
+        column.set_resizable(true);
 
         let icon_renderer = gtk::CellRendererPixbuf::new();
         column.pack_start(&icon_renderer, false);
         column.add_attribute(&icon_renderer, "icon-name", COL_ICON as i32);
 
         let text_renderer = gtk::CellRendererText::new();
+        text_renderer.set_property("ellipsize", pango::EllipsizeMode::End);
         column.pack_start(&text_renderer, true);
         column.add_attribute(&text_renderer, "text", COL_LABEL as i32);
 
@@ -126,7 +133,8 @@ impl ConnectionPanel {
 
         let scrolled = gtk::ScrolledWindow::builder()
             .vexpand(true)
-            .hscrollbar_policy(gtk::PolicyType::Never)
+            .hscrollbar_policy(gtk::PolicyType::Automatic)
+            .propagate_natural_width(false)
             .build();
         scrolled.set_child(Some(&tree_view));
         root.append(&scrolled);

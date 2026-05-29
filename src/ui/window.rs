@@ -33,6 +33,7 @@ pub struct MainWindow {
     notebook: gtk::Notebook,
     tabs: Arc<Mutex<Vec<QueryTab>>>,
     result_grid: ResultGrid,
+    query_and_result: gtk::Paned,
     status_bar: gtk::Box,
     status_label: gtk::Label,
     data_state: Arc<Mutex<DataViewState>>,
@@ -70,7 +71,13 @@ impl MainWindow {
             .start_child(&notebook)
             .end_child(&result_grid.root)
             .position(300)
+            .resize_start_child(true)
+            .resize_end_child(true)
+            .shrink_start_child(false)
+            .shrink_end_child(false)
             .build();
+        notebook.set_visible(false);
+        query_and_result.set_resize_start_child(false);
 
         // Create main layout (connection/schema panel + query/result)
         let main_paned = gtk::Paned::builder()
@@ -78,6 +85,12 @@ impl MainWindow {
             .start_child(&panel.root)
             .end_child(&query_and_result)
             .position(320)
+            .resize_start_child(false)
+            .resize_end_child(true)
+            .shrink_start_child(false)
+            .shrink_end_child(false)
+            .hexpand(true)
+            .vexpand(true)
             .build();
 
         // Create status bar
@@ -117,6 +130,7 @@ impl MainWindow {
             notebook,
             tabs: Arc::new(Mutex::new(Vec::new())),
             result_grid,
+            query_and_result,
             status_bar,
             status_label,
             data_state: Arc::new(Mutex::new(DataViewState {
@@ -126,12 +140,12 @@ impl MainWindow {
         };
 
         this.result_grid.wire_copy_actions();
-        this.create_query_tab();
         this.wire_events();
         this.refresh_list();
         this.refresh_query_connections();
         this.refresh_query_databases();
         this.refresh_schema_tree();
+        this.update_editor_visibility();
 
         this
     }
@@ -179,6 +193,8 @@ impl MainWindow {
                 if page < tabs.len() as u32 {
                     tabs.remove(page as usize);
                 }
+                drop(tabs);
+                this2.update_editor_visibility();
             }
         });
 
@@ -190,6 +206,7 @@ impl MainWindow {
 
         tabs.push(tab);
         drop(tabs);
+        self.update_editor_visibility();
         let names: Vec<String> = self
             .state
             .connections()
@@ -209,6 +226,8 @@ impl MainWindow {
             if (page_num as usize) < tabs.len() {
                 tabs.remove(page_num as usize);
             }
+            drop(tabs);
+            self.update_editor_visibility();
         }
     }
 
@@ -217,6 +236,23 @@ impl MainWindow {
         let names: Vec<String> = conns.iter().map(|c| c.name.clone()).collect();
         for tab in self.tabs.lock().expect("state lock poisoned").iter() {
             tab.set_connections(&names);
+        }
+    }
+
+    fn update_editor_visibility(&self) {
+        let has_tabs = !self.tabs.lock().expect("state lock poisoned").is_empty();
+        self.notebook.set_visible(has_tabs);
+        if has_tabs {
+            self.query_and_result.set_resize_start_child(true);
+            let total = self.query_and_result.allocated_height();
+            if total > 200 {
+                self.query_and_result.set_position(total / 2);
+            } else {
+                self.query_and_result.set_position(300);
+            }
+        } else {
+            self.query_and_result.set_resize_start_child(false);
+            self.query_and_result.set_position(0);
         }
     }
 
@@ -1035,6 +1071,7 @@ impl MainWindow {
             notebook: self.notebook.clone(),
             tabs: self.tabs.clone(),
             result_grid: self.result_grid.clone(),
+            query_and_result: self.query_and_result.clone(),
             status_bar: self.status_bar.clone(),
             status_label: self.status_label.clone(),
             data_state: self.data_state.clone(),
