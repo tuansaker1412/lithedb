@@ -8,7 +8,7 @@ use sqlx::{Column, MySqlPool, Row, TypeInfo};
 use tokio::sync::Mutex;
 
 use super::driver::{
-    ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
+    CellValue, ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
 };
 use crate::config::settings;
 
@@ -62,12 +62,7 @@ impl MySqlDriver {
     fn value_to_string(row: &sqlx::mysql::MySqlRow, idx: usize, type_name: &str) -> Option<String> {
         let upper = type_name.to_ascii_uppercase();
         match upper.as_str() {
-            "BOOLEAN" | "BOOL" | "TINYINT(1)" => row
-                .try_get::<Option<bool>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "TINYINT" => row
+            "BOOLEAN" | "BOOL" | "TINYINT(1)" | "TINYINT" => row
                 .try_get::<Option<i8>, _>(idx)
                 .ok()
                 .flatten()
@@ -122,6 +117,21 @@ impl MySqlDriver {
                 .ok()
                 .flatten()
                 .map(|v| format!("0x{}", hex::encode(v))),
+            "DATE" => row
+                .try_get::<Option<chrono::NaiveDate>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "TIME" => row
+                .try_get::<Option<chrono::NaiveTime>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "DATETIME" | "TIMESTAMP" => row
+                .try_get::<Option<chrono::NaiveDateTime>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.format("%Y-%m-%d %H:%M:%S%.f").to_string()),
             _ => row
                 .try_get::<Option<String>, _>(idx)
                 .ok()
@@ -373,8 +383,56 @@ impl DatabaseDriver for MySqlDriver {
             })
             .unwrap_or_default();
 
+        let pool = self.get_pool().await?;
+        let meta = sqlx::query(
+            "SELECT column_name, data_type FROM information_schema.columns \
+             WHERE table_schema = DATABASE() AND table_name = ? \
+             ORDER BY ordinal_position",
+        )
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let cols: Vec<(String, String)> = meta
+            .iter()
+            .filter_map(|r| {
+                let name = r.try_get::<String, _>(0).ok()?;
+                let dtype = r.try_get::<String, _>(1).unwrap_or_default();
+                Some((name, dtype))
+            })
+            .collect();
+
+        let select_list = if cols.is_empty() {
+            "*".to_string()
+        } else {
+            cols.iter()
+                .map(|(name, dtype)| {
+                    let ident = Self::quote_ident(name);
+                    let lower = dtype.to_ascii_lowercase();
+                    let is_binary = matches!(
+                        lower.as_str(),
+                        "blob"
+                            | "tinyblob"
+                            | "mediumblob"
+                            | "longblob"
+                            | "binary"
+                            | "varbinary"
+                            | "bit"
+                    );
+                    if is_binary {
+                        format!("CONCAT('0x', HEX({ident})) AS {ident}")
+                    } else {
+                        format!("CAST({ident} AS CHAR) AS {ident}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
         let sql = format!(
-            "SELECT * FROM {}{} LIMIT {} OFFSET {}",
+            "SELECT {} FROM {}{} LIMIT {} OFFSET {}",
+            select_list,
             Self::quote_ident(table),
             order_clause,
             limit,
@@ -382,6 +440,110 @@ impl DatabaseDriver for MySqlDriver {
         );
 
         self.execute_query(&sql).await
+    }
+
+    async fn insert_row(&self, table: &str, values: &[CellValue]) -> Result<u64, String> {
+        if values.is_empty() {
+            return Err("no values to insert".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let cols = values
+            .iter()
+            .map(|v| Self::quote_ident(&v.column))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let placeholders = vec!["?"; values.len()].join(", ");
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            Self::quote_ident(table),
+            cols,
+            placeholders
+        );
+        let mut query = sqlx::query(&sql);
+        for v in values {
+            query = query.bind(v.value.clone());
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
+    }
+
+    async fn update_row(
+        &self,
+        table: &str,
+        changes: &[CellValue],
+        keys: &[CellValue],
+    ) -> Result<u64, String> {
+        if changes.is_empty() {
+            return Err("no changes to apply".to_string());
+        }
+        if keys.is_empty() {
+            return Err("no key to identify the row".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let set_clause = changes
+            .iter()
+            .map(|c| format!("{} = ?", Self::quote_ident(&c.column)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let where_clause = keys
+            .iter()
+            .map(|k| {
+                if k.value.is_none() {
+                    format!("{} IS NULL", Self::quote_ident(&k.column))
+                } else {
+                    format!("{} = ?", Self::quote_ident(&k.column))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let sql = format!(
+            "UPDATE {} SET {} WHERE {}",
+            Self::quote_ident(table),
+            set_clause,
+            where_clause
+        );
+        let mut query = sqlx::query(&sql);
+        for c in changes {
+            query = query.bind(c.value.clone());
+        }
+        for k in keys {
+            if k.value.is_some() {
+                query = query.bind(k.value.clone());
+            }
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
+    }
+
+    async fn delete_row(&self, table: &str, keys: &[CellValue]) -> Result<u64, String> {
+        if keys.is_empty() {
+            return Err("no key to identify the row".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let where_clause = keys
+            .iter()
+            .map(|k| {
+                if k.value.is_none() {
+                    format!("{} IS NULL", Self::quote_ident(&k.column))
+                } else {
+                    format!("{} = ?", Self::quote_ident(&k.column))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let sql = format!(
+            "DELETE FROM {} WHERE {}",
+            Self::quote_ident(table),
+            where_clause
+        );
+        let mut query = sqlx::query(&sql);
+        for k in keys {
+            if k.value.is_some() {
+                query = query.bind(k.value.clone());
+            }
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
     }
 
     async fn use_database(&self, database: &str) -> Result<(), String> {

@@ -9,7 +9,7 @@ use std::str::FromStr;
 use tokio::sync::Mutex;
 
 use super::driver::{
-    ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
+    CellValue, ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
 };
 use crate::config::settings;
 
@@ -313,6 +313,110 @@ impl DatabaseDriver for SqliteDriver {
         );
 
         self.execute_query(&sql).await
+    }
+
+    async fn insert_row(&self, table: &str, values: &[CellValue]) -> Result<u64, String> {
+        if values.is_empty() {
+            return Err("no values to insert".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let cols = values
+            .iter()
+            .map(|v| Self::quote_ident(&v.column))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let placeholders = vec!["?"; values.len()].join(", ");
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            Self::quote_ident(table),
+            cols,
+            placeholders
+        );
+        let mut query = sqlx::query(&sql);
+        for v in values {
+            query = query.bind(v.value.clone());
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
+    }
+
+    async fn update_row(
+        &self,
+        table: &str,
+        changes: &[CellValue],
+        keys: &[CellValue],
+    ) -> Result<u64, String> {
+        if changes.is_empty() {
+            return Err("no changes to apply".to_string());
+        }
+        if keys.is_empty() {
+            return Err("no key to identify the row".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let set_clause = changes
+            .iter()
+            .map(|c| format!("{} = ?", Self::quote_ident(&c.column)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let where_clause = keys
+            .iter()
+            .map(|k| {
+                if k.value.is_none() {
+                    format!("{} IS NULL", Self::quote_ident(&k.column))
+                } else {
+                    format!("{} = ?", Self::quote_ident(&k.column))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let sql = format!(
+            "UPDATE {} SET {} WHERE {}",
+            Self::quote_ident(table),
+            set_clause,
+            where_clause
+        );
+        let mut query = sqlx::query(&sql);
+        for c in changes {
+            query = query.bind(c.value.clone());
+        }
+        for k in keys {
+            if k.value.is_some() {
+                query = query.bind(k.value.clone());
+            }
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
+    }
+
+    async fn delete_row(&self, table: &str, keys: &[CellValue]) -> Result<u64, String> {
+        if keys.is_empty() {
+            return Err("no key to identify the row".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let where_clause = keys
+            .iter()
+            .map(|k| {
+                if k.value.is_none() {
+                    format!("{} IS NULL", Self::quote_ident(&k.column))
+                } else {
+                    format!("{} = ?", Self::quote_ident(&k.column))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let sql = format!(
+            "DELETE FROM {} WHERE {}",
+            Self::quote_ident(table),
+            where_clause
+        );
+        let mut query = sqlx::query(&sql);
+        for k in keys {
+            if k.value.is_some() {
+                query = query.bind(k.value.clone());
+            }
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
     }
 
     async fn use_database(&self, _database: &str) -> Result<(), String> {

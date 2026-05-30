@@ -8,7 +8,7 @@ A modern, native Linux database client built with Rust, GTK4, and libadwaita, in
 - **Connection Manager**: Add, edit, delete, connect, and disconnect database connections
 - **Secure Credentials**: System keyring integration with encrypted fallback storage
 - **Schema Browser**: Navigate databases and tables with async loading
-- **Table Data Viewer**: Pagination, sorting, copy, and CSV export
+- **Table Data Viewer**: Pagination, sorting, copy, CSV export, and row editing (add/edit/delete)
 - **SQL Editor**: Syntax highlighting with SourceView, run queries, multi-tab support
 - **Modern UI**: Native GTK4/libadwaita interface with keyboard shortcuts
 - **Cross-Distribution**: Available as .deb, .rpm, Arch package, and Flatpak

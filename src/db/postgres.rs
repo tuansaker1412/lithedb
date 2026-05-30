@@ -8,7 +8,7 @@ use sqlx::{Column, PgPool, Row, TypeInfo};
 use tokio::sync::Mutex;
 
 use super::driver::{
-    ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
+    CellValue, ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
 };
 use crate::config::settings;
 
@@ -120,11 +120,32 @@ impl PostgresDriver {
                 .ok()
                 .flatten()
                 .map(|v| format!("\\x{}", hex::encode(v))),
+            "DATE" => row
+                .try_get::<Option<chrono::NaiveDate>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "TIME" => row
+                .try_get::<Option<chrono::NaiveTime>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "TIMESTAMP" => row
+                .try_get::<Option<chrono::NaiveDateTime>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.format("%Y-%m-%d %H:%M:%S%.f").to_string()),
+            "TIMESTAMPTZ" => row
+                .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_rfc3339()),
             "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CHAR" | "CITEXT" | "UUID" | "INET"
-            | "CIDR" | "MACADDR" | "MACADDR8" | "JSON" | "JSONB" | "XML" | "DATE" | "TIME"
-            | "TIMETZ" | "TIMESTAMP" | "TIMESTAMPTZ" | "INTERVAL" | "NUMERIC" | "MONEY"
-            | "POINT" | "LINE" | "LSEG" | "BOX" | "PATH" | "POLYGON" | "CIRCLE" | "TSVECTOR"
-            | "TSQUERY" => row.try_get::<Option<String>, _>(idx).ok().flatten(),
+            | "CIDR" | "MACADDR" | "MACADDR8" | "JSON" | "JSONB" | "XML" | "TIMETZ"
+            | "INTERVAL" | "NUMERIC" | "MONEY" | "POINT" | "LINE" | "LSEG" | "BOX" | "PATH"
+            | "POLYGON" | "CIRCLE" | "TSVECTOR" | "TSQUERY" => {
+                row.try_get::<Option<String>, _>(idx).ok().flatten()
+            }
             _ => row
                 .try_get::<Option<String>, _>(idx)
                 .ok()
@@ -429,6 +450,115 @@ impl DatabaseDriver for PostgresDriver {
         );
 
         self.execute_query(&sql).await
+    }
+
+    async fn insert_row(&self, table: &str, values: &[CellValue]) -> Result<u64, String> {
+        if values.is_empty() {
+            return Err("no values to insert".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let cols = values
+            .iter()
+            .map(|v| Self::quote_ident(&v.column))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let placeholders = (1..=values.len())
+            .map(|i| format!("${}", i))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            Self::quote_ident(table),
+            cols,
+            placeholders
+        );
+        let mut query = sqlx::query(&sql);
+        for v in values {
+            query = query.bind(v.value.clone());
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
+    }
+
+    async fn update_row(
+        &self,
+        table: &str,
+        changes: &[CellValue],
+        keys: &[CellValue],
+    ) -> Result<u64, String> {
+        if changes.is_empty() {
+            return Err("no changes to apply".to_string());
+        }
+        if keys.is_empty() {
+            return Err("no key to identify the row".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let mut idx = 1;
+        let set_clause = changes
+            .iter()
+            .map(|c| {
+                let frag = format!("{} = ${}", Self::quote_ident(&c.column), idx);
+                idx += 1;
+                frag
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut where_parts = Vec::new();
+        for k in keys {
+            if k.value.is_none() {
+                where_parts.push(format!("{} IS NULL", Self::quote_ident(&k.column)));
+            } else {
+                where_parts.push(format!("{} = ${}", Self::quote_ident(&k.column), idx));
+                idx += 1;
+            }
+        }
+        let sql = format!(
+            "UPDATE {} SET {} WHERE {}",
+            Self::quote_ident(table),
+            set_clause,
+            where_parts.join(" AND ")
+        );
+        let mut query = sqlx::query(&sql);
+        for c in changes {
+            query = query.bind(c.value.clone());
+        }
+        for k in keys {
+            if k.value.is_some() {
+                query = query.bind(k.value.clone());
+            }
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
+    }
+
+    async fn delete_row(&self, table: &str, keys: &[CellValue]) -> Result<u64, String> {
+        if keys.is_empty() {
+            return Err("no key to identify the row".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let mut idx = 1;
+        let mut where_parts = Vec::new();
+        for k in keys {
+            if k.value.is_none() {
+                where_parts.push(format!("{} IS NULL", Self::quote_ident(&k.column)));
+            } else {
+                where_parts.push(format!("{} = ${}", Self::quote_ident(&k.column), idx));
+                idx += 1;
+            }
+        }
+        let sql = format!(
+            "DELETE FROM {} WHERE {}",
+            Self::quote_ident(table),
+            where_parts.join(" AND ")
+        );
+        let mut query = sqlx::query(&sql);
+        for k in keys {
+            if k.value.is_some() {
+                query = query.bind(k.value.clone());
+            }
+        }
+        let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
+        Ok(done.rows_affected())
     }
 
     async fn use_database(&self, database: &str) -> Result<(), String> {

@@ -10,12 +10,13 @@ gtk4 = "0.7"
 libadwaita = { version = "0.5", features = ["v1_2"] }
 sourceview5 = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "chrono"] }
 async-trait = "0.1"
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
 keyring = "2"
 aes-gcm = "0.10"
 directories = "5"

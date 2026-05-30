@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gtk::gdk;
@@ -7,6 +9,7 @@ use gtk::prelude::*;
 use gtk4 as gtk;
 
 use crate::db::driver::QueryResult;
+use crate::ui::notify::Notifier;
 
 const MIN_COLUMN_WIDTH: i32 = 96;
 const MAX_COLUMN_WIDTH: i32 = 260;
@@ -20,6 +23,9 @@ pub struct ResultGrid {
     pub next_button: gtk::Button,
     pub apply_sort_button: gtk::Button,
     pub sort_asc_switch: gtk::Switch,
+    pub add_row_button: gtk::Button,
+    pub edit_row_button: gtk::Button,
+    pub delete_row_button: gtk::Button,
     pub copy_cell_button: gtk::Button,
     pub copy_row_json_button: gtk::Button,
     pub copy_row_csv_button: gtk::Button,
@@ -29,6 +35,7 @@ pub struct ResultGrid {
     content_box: gtk::Box,
     last_result: Arc<Mutex<Option<Arc<QueryResult>>>>,
     selected_row: Arc<Mutex<Option<usize>>>,
+    notifier: Rc<RefCell<Option<Notifier>>>,
 }
 
 impl ResultGrid {
@@ -45,19 +52,23 @@ impl ResultGrid {
         let toolbar = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(8)
+            .css_classes(vec!["tpl-toolbar"])
             .build();
 
         let reload_button = gtk::Button::builder()
             .icon_name("view-refresh-symbolic")
             .tooltip_text("Reload from database (F5)")
+            .css_classes(vec!["flat"])
             .build();
         let prev_button = gtk::Button::builder()
             .icon_name("go-previous-symbolic")
             .tooltip_text("Previous Page")
+            .css_classes(vec!["flat"])
             .build();
         let next_button = gtk::Button::builder()
             .icon_name("go-next-symbolic")
             .tooltip_text("Next Page")
+            .css_classes(vec!["flat"])
             .build();
 
         let sort_column_entry = gtk::Entry::builder()
@@ -72,23 +83,46 @@ impl ResultGrid {
         let apply_sort_button = gtk::Button::builder()
             .label("Sort")
             .tooltip_text("Apply Sort")
+            .css_classes(vec!["flat"])
+            .build();
+
+        let add_row_button = gtk::Button::builder()
+            .icon_name("list-add-symbolic")
+            .tooltip_text("Add Row")
+            .css_classes(vec!["flat"])
+            .build();
+        let edit_row_button = gtk::Button::builder()
+            .icon_name("document-edit-symbolic")
+            .tooltip_text("Edit Selected Row")
+            .sensitive(false)
+            .css_classes(vec!["flat"])
+            .build();
+        let delete_row_button = gtk::Button::builder()
+            .icon_name("user-trash-symbolic")
+            .tooltip_text("Delete Selected Row")
+            .sensitive(false)
+            .css_classes(vec!["flat"])
             .build();
 
         let copy_cell_button = gtk::Button::builder()
             .icon_name("edit-copy-symbolic")
             .tooltip_text("Copy Cell")
+            .css_classes(vec!["flat"])
             .build();
         let copy_row_json_button = gtk::Button::builder()
             .label("JSON")
             .tooltip_text("Copy Row as JSON")
+            .css_classes(vec!["flat"])
             .build();
         let copy_row_csv_button = gtk::Button::builder()
             .label("CSV")
             .tooltip_text("Copy Row as CSV")
+            .css_classes(vec!["flat"])
             .build();
         let export_csv_button = gtk::Button::builder()
             .icon_name("document-save-symbolic")
             .tooltip_text("Export as CSV")
+            .css_classes(vec!["flat"])
             .build();
 
         let status_label = gtk::Label::builder()
@@ -97,12 +131,25 @@ impl ResultGrid {
             .hexpand(true)
             .build();
 
-        toolbar.append(&reload_button);
+        let linked = |children: &[&gtk::Widget]| {
+            let group = gtk::Box::builder()
+                .orientation(gtk::Orientation::Horizontal)
+                .css_classes(vec!["linked"])
+                .build();
+            for child in children {
+                group.append(*child);
+            }
+            group
+        };
+
+        let nav_group = linked(&[
+            reload_button.upcast_ref(),
+            prev_button.upcast_ref(),
+            next_button.upcast_ref(),
+        ]);
+        toolbar.append(&nav_group);
         toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-        toolbar.append(&prev_button);
-        toolbar.append(&next_button);
-        toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-        toolbar.append(&sort_column_entry);
+
         let sort_dir_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(6)
@@ -113,18 +160,31 @@ impl ResultGrid {
         sort_dir_label.add_css_class("caption-heading");
         sort_dir_box.append(&sort_dir_label);
         sort_dir_box.append(&sort_asc_switch);
-        toolbar.append(&sort_dir_box);
         {
             let label = sort_dir_label.clone();
             sort_asc_switch.connect_active_notify(move |s| {
                 label.set_label(if s.is_active() { "ASC" } else { "DESC" });
             });
         }
+        toolbar.append(&sort_column_entry);
+        toolbar.append(&sort_dir_box);
         toolbar.append(&apply_sort_button);
         toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-        toolbar.append(&copy_cell_button);
-        toolbar.append(&copy_row_json_button);
-        toolbar.append(&copy_row_csv_button);
+
+        let crud_group = linked(&[
+            add_row_button.upcast_ref(),
+            edit_row_button.upcast_ref(),
+            delete_row_button.upcast_ref(),
+        ]);
+        toolbar.append(&crud_group);
+        toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
+
+        let copy_group = linked(&[
+            copy_cell_button.upcast_ref(),
+            copy_row_json_button.upcast_ref(),
+            copy_row_csv_button.upcast_ref(),
+        ]);
+        toolbar.append(&copy_group);
         toolbar.append(&export_csv_button);
         toolbar.append(&status_label);
         root.append(&toolbar);
@@ -147,6 +207,9 @@ impl ResultGrid {
             next_button,
             apply_sort_button,
             sort_asc_switch,
+            add_row_button,
+            edit_row_button,
+            delete_row_button,
             copy_cell_button,
             copy_row_json_button,
             copy_row_csv_button,
@@ -156,6 +219,7 @@ impl ResultGrid {
             content_box,
             last_result: Arc::new(Mutex::new(None)),
             selected_row: Arc::new(Mutex::new(None)),
+            notifier: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -165,6 +229,8 @@ impl ResultGrid {
         }
         *self.last_result.lock().expect("result lock poisoned") = None;
         *self.selected_row.lock().expect("row lock poisoned") = None;
+        self.edit_row_button.set_sensitive(false);
+        self.delete_row_button.set_sensitive(false);
         self.status_label.set_text("No data");
         self.next_button.set_sensitive(false);
         self.prev_button.set_sensitive(false);
@@ -227,6 +293,8 @@ impl ResultGrid {
         }
         *self.last_result.lock().expect("result lock poisoned") = Some(Arc::clone(&result));
         *self.selected_row.lock().expect("row lock poisoned") = None;
+        self.edit_row_button.set_sensitive(false);
+        self.delete_row_button.set_sensitive(false);
 
         self.prev_button.set_sensitive(page > 0);
         self.next_button
@@ -286,13 +354,21 @@ impl ResultGrid {
         }
 
         let selected_row = self.selected_row.clone();
+        let edit_btn = self.edit_row_button.clone();
+        let delete_btn = self.delete_row_button.clone();
         table.selection().connect_changed(move |selection| {
             if let Some((model, iter)) = selection.selected() {
                 let path = model.path(&iter);
                 if let Some(index) = path.indices().first() {
                     *selected_row.lock().expect("row lock poisoned") = Some(*index as usize);
+                    edit_btn.set_sensitive(true);
+                    delete_btn.set_sensitive(true);
+                    return;
                 }
             }
+            *selected_row.lock().expect("row lock poisoned") = None;
+            edit_btn.set_sensitive(false);
+            delete_btn.set_sensitive(false);
         });
 
         self.content_box.append(&table);
@@ -333,7 +409,7 @@ impl ResultGrid {
                         if let Some(row) = res.rows.get(r_idx) {
                             if let Some(first_val) = row.first() {
                                 let txt = first_val.clone().unwrap_or_else(|| "NULL".to_string());
-                                this.copy_to_clipboard(&txt);
+                                this.copy_to_clipboard(&txt, "Cell copied to clipboard");
                             }
                         }
                     }
@@ -361,7 +437,10 @@ impl ResultGrid {
                                         .unwrap_or(serde_json::Value::Null),
                                 );
                             }
-                            this.copy_to_clipboard(&serde_json::Value::Object(map).to_string());
+                            this.copy_to_clipboard(
+                                &serde_json::Value::Object(map).to_string(),
+                                "Row copied as JSON",
+                            );
                         }
                     }
                 }
@@ -384,7 +463,7 @@ impl ResultGrid {
                                 .map(|v| Self::csv_escape(v.clone().unwrap_or_default()))
                                 .collect::<Vec<_>>()
                                 .join(",");
-                            this.copy_to_clipboard(&csv);
+                            this.copy_to_clipboard(&csv, "Row copied as CSV");
                         }
                     }
                 }
@@ -392,11 +471,18 @@ impl ResultGrid {
         }
     }
 
-    fn copy_to_clipboard(&self, text: &str) {
+    pub fn set_notifier(&self, notifier: Notifier) {
+        *self.notifier.borrow_mut() = Some(notifier);
+    }
+
+    fn copy_to_clipboard(&self, text: &str, message: &str) {
         if let Some(display) = gdk::Display::default() {
             let clipboard = display.clipboard();
             clipboard.set_text(text);
-            self.status_label.set_text("Copied to clipboard");
+            self.status_label.set_text(message);
+            if let Some(notifier) = self.notifier.borrow().as_ref() {
+                notifier.success(message);
+            }
         }
     }
 
@@ -408,6 +494,31 @@ impl ResultGrid {
     fn initial_column_width(column_name: &str) -> i32 {
         let estimated = (column_name.chars().count() as i32 * 9) + 48;
         estimated.clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH)
+    }
+
+    pub fn set_crud_visible(&self, visible: bool) {
+        self.add_row_button.set_visible(visible);
+        self.edit_row_button.set_visible(visible);
+        self.delete_row_button.set_visible(visible);
+    }
+
+    pub fn columns(&self) -> Vec<String> {
+        self.last_result
+            .lock()
+            .expect("result lock poisoned")
+            .as_ref()
+            .map(|r| r.columns.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn selected_row_values(&self) -> Option<Vec<Option<String>>> {
+        let idx = (*self.selected_row.lock().expect("row lock poisoned"))?;
+        let res = self
+            .last_result
+            .lock()
+            .expect("result lock poisoned")
+            .clone()?;
+        res.rows.get(idx).cloned()
     }
 
     pub fn current_csv(&self) -> Option<String> {

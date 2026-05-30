@@ -8,11 +8,14 @@ use libadwaita as adw;
 use libadwaita::prelude::*;
 
 use crate::config::connection::{ConnectionConfig, ConnectionStore};
+use crate::db::driver::{CellValue, ColumnInfo};
 use crate::state::app_state::AppState;
 use crate::ui::dialogs::connection_dialog::ConnectionDialog;
+use crate::ui::dialogs::row_editor_dialog::{RowEditResult, RowEditorDialog, RowEditorMode};
 use crate::ui::editor::query_tab::QueryTab;
 use crate::ui::grid::table_tab::{TableTab, TableTabKind};
 use crate::ui::header_bar::AppHeaderBar;
+use crate::ui::notify::Notifier;
 use crate::ui::sidebar::connection_panel::ConnectionPanel;
 
 pub struct MainWindow {
@@ -29,6 +32,7 @@ pub struct MainWindow {
     query_and_result: gtk::Paned,
     status_bar: gtk::Box,
     status_label: gtk::Label,
+    notifier: Notifier,
 }
 
 impl MainWindow {
@@ -140,8 +144,12 @@ impl MainWindow {
         content_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         content_box.append(&status_bar);
 
+        let toast_overlay = adw::ToastOverlay::new();
+        toast_overlay.set_child(Some(&content_box));
+        let notifier = Notifier::new(toast_overlay.clone());
+
         window.set_titlebar(Some(&header_bar.header));
-        window.set_child(Some(&content_box));
+        window.set_child(Some(&toast_overlay));
 
         let this = Self {
             window,
@@ -157,6 +165,7 @@ impl MainWindow {
             query_and_result,
             status_bar,
             status_label,
+            notifier,
         };
 
         this.wire_events();
@@ -306,6 +315,7 @@ impl MainWindow {
     }
 
     fn attach_data_tab(&self, tab: TableTab, focus: bool) {
+        tab.grid.set_notifier(self.notifier.clone());
         let page_num = self
             .data_notebook
             .append_page(&tab.root, Some(&tab.label_box));
@@ -370,6 +380,35 @@ impl MainWindow {
         tab.grid.export_csv_button.connect_clicked(move |_| {
             this2.export_csv();
         });
+
+        match &tab.kind {
+            TableTabKind::Table { .. } => {
+                tab.grid.set_crud_visible(true);
+
+                let this2 = self.clone_refs();
+                let tab_for_add = tab.clone();
+                tab.grid.add_row_button.connect_clicked(move |_| {
+                    this2.open_row_editor(&tab_for_add, RowEditorMode::Insert);
+                });
+
+                let this2 = self.clone_refs();
+                let tab_for_edit = tab.clone();
+                tab.grid.edit_row_button.connect_clicked(move |_| {
+                    if let Some(current) = tab_for_edit.grid.selected_row_values() {
+                        this2.open_row_editor(&tab_for_edit, RowEditorMode::Edit { current });
+                    }
+                });
+
+                let this2 = self.clone_refs();
+                let tab_for_delete = tab.clone();
+                tab.grid.delete_row_button.connect_clicked(move |_| {
+                    this2.confirm_delete_row(&tab_for_delete);
+                });
+            }
+            TableTabKind::QueryResult => {
+                tab.grid.set_crud_visible(false);
+            }
+        }
 
         if let Some(structure) = &tab.structure {
             let this2 = self.clone_refs();
@@ -775,6 +814,9 @@ impl MainWindow {
                             this2
                                 .status_label
                                 .set_text(&format!("Connected to {}", cfg2.name));
+                            this2
+                                .notifier
+                                .success(&format!("Connected to {}", cfg2.name));
                             this2.refresh_list();
                             this2.refresh_schema_tree();
                             this2.refresh_query_databases();
@@ -794,9 +836,17 @@ impl MainWindow {
     fn disconnect_active(&self) {
         let prev_id = self.state.active_connection_id();
         let this2 = self.clone_refs();
+        let prev_name = prev_id
+            .as_ref()
+            .and_then(|id| this2.state.get_connection(id))
+            .map(|c| c.name);
         glib::spawn_future_local(async move {
             this2.state.disconnect().await;
             this2.status_label.set_text("Disconnected");
+            match prev_name {
+                Some(name) => this2.notifier.info(&format!("Disconnected from {}", name)),
+                None => this2.notifier.info("Disconnected"),
+            }
             this2.refresh_list();
             this2.refresh_schema_tree();
             this2.refresh_query_databases();
@@ -1114,6 +1164,233 @@ impl MainWindow {
         });
     }
 
+    fn table_ref(tab: &TableTab) -> Option<(String, String)> {
+        match &tab.kind {
+            TableTabKind::Table {
+                database, table, ..
+            } => Some((database.clone(), table.clone())),
+            TableTabKind::QueryResult => None,
+        }
+    }
+
+    fn open_row_editor(&self, tab: &TableTab, mode: RowEditorMode) {
+        let (db, tbl) = match Self::table_ref(tab) {
+            Some(v) => v,
+            None => return,
+        };
+        if self.state.active_connection_id().is_none() {
+            self.toast("No active connection");
+            return;
+        }
+
+        let this2 = self.clone_refs();
+        let tab_clone = tab.clone();
+        let title = match &mode {
+            RowEditorMode::Insert => format!("Add row to {}", tbl),
+            RowEditorMode::Edit { .. } => format!("Edit row in {}", tbl),
+        };
+        glib::spawn_future_local(async move {
+            let columns = match this2.state.list_columns(&db, &tbl).await {
+                Ok(c) if !c.is_empty() => c,
+                Ok(_) => {
+                    this2.toast("Table has no columns to edit");
+                    return;
+                }
+                Err(e) => {
+                    this2.toast(&format!("Failed to load columns: {}", e));
+                    return;
+                }
+            };
+
+            let is_insert = matches!(mode, RowEditorMode::Insert);
+            let original_row = match &mode {
+                RowEditorMode::Edit { current } => Some(current.clone()),
+                RowEditorMode::Insert => None,
+            };
+
+            let this3 = this2.clone_refs();
+            let tab_for_submit = tab_clone.clone();
+            let columns_for_submit = columns.clone();
+            RowEditorDialog::present(
+                &this2.window,
+                &title,
+                &columns,
+                mode,
+                move |result: RowEditResult| {
+                    if !matches!(tab_for_submit.kind, TableTabKind::Table { .. }) {
+                        return;
+                    }
+                    if is_insert {
+                        this3.submit_row_insert(&tab_for_submit, result.values);
+                    } else {
+                        let keys = Self::build_keys(
+                            &columns_for_submit,
+                            original_row.as_deref().unwrap_or(&[]),
+                        );
+                        this3.submit_row_update(&tab_for_submit, result.values, keys);
+                    }
+                },
+            );
+        });
+    }
+
+    fn build_keys(columns: &[ColumnInfo], row: &[Option<String>]) -> Vec<CellValue> {
+        let pk_cols: Vec<&ColumnInfo> = columns.iter().filter(|c| c.is_primary_key).collect();
+        let key_cols: Vec<&ColumnInfo> = if pk_cols.is_empty() {
+            columns.iter().collect()
+        } else {
+            pk_cols
+        };
+        key_cols
+            .iter()
+            .filter_map(|col| {
+                let idx = columns.iter().position(|c| c.name == col.name)?;
+                Some(CellValue {
+                    column: col.name.clone(),
+                    value: row.get(idx).cloned().flatten(),
+                })
+            })
+            .collect()
+    }
+
+    fn submit_row_insert(&self, tab: &TableTab, values: Vec<CellValue>) {
+        let (_, tbl) = match Self::table_ref(tab) {
+            Some(v) => v,
+            None => return,
+        };
+        let this2 = self.clone_refs();
+        let tab_clone = tab.clone();
+        glib::spawn_future_local(async move {
+            match this2.state.insert_row(&tbl, values).await {
+                Ok(n) => {
+                    let msg = format!("Inserted {} row", n);
+                    this2.status_label.set_text(&msg);
+                    this2.notifier.success(&msg);
+                    this2.load_table_data_into_tab(&tab_clone);
+                }
+                Err(e) => {
+                    this2.status_label.set_text(&format!("Error: {}", e));
+                    this2.toast(&format!("Insert failed: {}", e));
+                }
+            }
+        });
+    }
+
+    fn submit_row_update(&self, tab: &TableTab, changes: Vec<CellValue>, keys: Vec<CellValue>) {
+        let (_, tbl) = match Self::table_ref(tab) {
+            Some(v) => v,
+            None => return,
+        };
+        if keys.is_empty() {
+            self.toast("Cannot identify the row to update");
+            return;
+        }
+        let this2 = self.clone_refs();
+        let tab_clone = tab.clone();
+        glib::spawn_future_local(async move {
+            match this2.state.update_row(&tbl, changes, keys).await {
+                Ok(n) => {
+                    let msg = if n == 1 {
+                        "Updated 1 row".to_string()
+                    } else {
+                        format!("Updated {} rows", n)
+                    };
+                    this2.status_label.set_text(&msg);
+                    this2.notifier.success(&msg);
+                    this2.load_table_data_into_tab(&tab_clone);
+                }
+                Err(e) => {
+                    this2.status_label.set_text(&format!("Error: {}", e));
+                    this2.toast(&format!("Update failed: {}", e));
+                }
+            }
+        });
+    }
+
+    fn confirm_delete_row(&self, tab: &TableTab) {
+        let (db, tbl) = match Self::table_ref(tab) {
+            Some(v) => v,
+            None => return,
+        };
+        if self.state.active_connection_id().is_none() {
+            self.toast("No active connection");
+            return;
+        }
+        let row = match tab.grid.selected_row_values() {
+            Some(r) => r,
+            None => return,
+        };
+
+        let this2 = self.clone_refs();
+        let tab_clone = tab.clone();
+        glib::spawn_future_local(async move {
+            let columns = match this2.state.list_columns(&db, &tbl).await {
+                Ok(c) if !c.is_empty() => c,
+                Ok(_) => {
+                    this2.toast("Table has no columns");
+                    return;
+                }
+                Err(e) => {
+                    this2.toast(&format!("Failed to load columns: {}", e));
+                    return;
+                }
+            };
+            let keys = Self::build_keys(&columns, &row);
+            if keys.is_empty() {
+                this2.toast("Cannot identify the row to delete");
+                return;
+            }
+
+            let dialog = gtk::MessageDialog::builder()
+                .transient_for(&this2.window)
+                .modal(true)
+                .message_type(gtk::MessageType::Warning)
+                .text("Delete this row?")
+                .secondary_text("This action cannot be undone.")
+                .build();
+            dialog.add_button("Cancel", gtk::ResponseType::Cancel);
+            let delete_btn = dialog.add_button("Delete", gtk::ResponseType::Accept);
+            delete_btn.add_css_class("destructive-action");
+
+            let this3 = this2.clone_refs();
+            let tab_for_del = tab_clone.clone();
+            dialog.connect_response(move |d, resp| {
+                if resp == gtk::ResponseType::Accept {
+                    this3.delete_row_from_tab(&tab_for_del, keys.clone());
+                }
+                d.close();
+            });
+            dialog.present();
+        });
+    }
+
+    fn delete_row_from_tab(&self, tab: &TableTab, keys: Vec<CellValue>) {
+        let (_, tbl) = match Self::table_ref(tab) {
+            Some(v) => v,
+            None => return,
+        };
+        let this2 = self.clone_refs();
+        let tab_clone = tab.clone();
+        glib::spawn_future_local(async move {
+            match this2.state.delete_row(&tbl, keys).await {
+                Ok(n) => {
+                    let msg = if n == 1 {
+                        "Deleted 1 row".to_string()
+                    } else {
+                        format!("Deleted {} rows", n)
+                    };
+                    this2.status_label.set_text(&msg);
+                    this2.notifier.success(&msg);
+                    this2.load_table_data_into_tab(&tab_clone);
+                }
+                Err(e) => {
+                    this2.status_label.set_text(&format!("Error: {}", e));
+                    this2.toast(&format!("Delete failed: {}", e));
+                }
+            }
+        });
+    }
+
     fn reload_active_data_tab(&self) {
         if let Some(tab) = self.current_data_tab() {
             match &tab.kind {
@@ -1138,11 +1415,17 @@ impl MainWindow {
             ],
         );
         chooser.set_current_name("export.csv");
+        let notifier = self.notifier.clone();
         chooser.connect_response(move |d, response| {
             if response == gtk::ResponseType::Accept {
-                if let Some(file) = d.file() {
-                    if let Some(path) = file.path() {
-                        let _ = std::fs::write(path, &csv);
+                if let Some(path) = d.file().and_then(|f| f.path()) {
+                    match std::fs::write(&path, &csv) {
+                        Ok(_) => {
+                            notifier.success(&format!("Exported CSV to {}", path.display()));
+                        }
+                        Err(e) => {
+                            notifier.error(&format!("Failed to export CSV: {}", e));
+                        }
                     }
                 }
             }
@@ -1329,13 +1612,7 @@ impl MainWindow {
     }
 
     fn toast(&self, msg: &str) {
-        let dialog = gtk::MessageDialog::builder()
-            .transient_for(&self.window)
-            .modal(true)
-            .text(msg)
-            .build();
-        dialog.connect_response(|d, _| d.close());
-        dialog.present();
+        self.notifier.info(msg);
     }
 
     fn clone_refs(&self) -> Self {
@@ -1368,6 +1645,7 @@ impl MainWindow {
             query_and_result: self.query_and_result.clone(),
             status_bar: self.status_bar.clone(),
             status_label: self.status_label.clone(),
+            notifier: self.notifier.clone(),
         }
     }
 }

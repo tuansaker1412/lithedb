@@ -1,7 +1,8 @@
 use gtk::glib;
 use gtk::pango;
-use gtk::prelude::*;
 use gtk4 as gtk;
+use libadwaita as adw;
+use libadwaita::prelude::*;
 
 use crate::config::connection::{ConnectionConfig, DriverType};
 
@@ -53,6 +54,7 @@ impl ConnectionPanel {
         let refresh_button = gtk::Button::builder()
             .icon_name("view-refresh-symbolic")
             .tooltip_text("Refresh Schema (Ctrl+R)")
+            .css_classes(vec!["flat"])
             .build();
 
         header.append(&title);
@@ -61,8 +63,8 @@ impl ConnectionPanel {
 
         let actions = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .spacing(6)
             .homogeneous(true)
+            .css_classes(vec!["linked", "tpl-action-bar"])
             .build();
 
         let add_button = gtk::Button::builder()
@@ -74,8 +76,9 @@ impl ConnectionPanel {
             .tooltip_text("Edit Connection")
             .build();
         let delete_button = gtk::Button::builder()
-            .icon_name("edit-delete-symbolic")
+            .icon_name("user-trash-symbolic")
             .tooltip_text("Delete Connection")
+            .css_classes(vec!["destructive-action"])
             .build();
 
         actions.append(&add_button);
@@ -85,15 +88,30 @@ impl ConnectionPanel {
 
         let link_actions = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .spacing(6)
+            .spacing(8)
             .homogeneous(true)
+            .margin_top(2)
             .build();
 
-        let connect_button = gtk::Button::builder()
+        let connect_content = adw::ButtonContent::builder()
+            .icon_name("network-transmit-receive-symbolic")
             .label("Connect")
-            .css_classes(vec!["suggested-action"])
             .build();
-        let disconnect_button = gtk::Button::builder().label("Disconnect").build();
+        let connect_button = gtk::Button::builder()
+            .child(&connect_content)
+            .tooltip_text("Connect to selected")
+            .css_classes(vec!["suggested-action", "tpl-pill"])
+            .build();
+
+        let disconnect_content = adw::ButtonContent::builder()
+            .icon_name("network-offline-symbolic")
+            .label("Disconnect")
+            .build();
+        let disconnect_button = gtk::Button::builder()
+            .child(&disconnect_content)
+            .tooltip_text("Disconnect active connection")
+            .css_classes(vec!["tpl-pill"])
+            .build();
 
         link_actions.append(&connect_button);
         link_actions.append(&disconnect_button);

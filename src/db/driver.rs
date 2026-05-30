@@ -36,6 +36,12 @@ pub struct QueryResult {
     pub truncated: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct CellValue {
+    pub column: String,
+    pub value: Option<String>,
+}
+
 #[async_trait]
 pub trait DatabaseDriver: Send + Sync {
     async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), String>;
@@ -59,4 +65,12 @@ pub trait DatabaseDriver: Send + Sync {
         order_by: Option<(&str, bool)>,
     ) -> Result<QueryResult, String>;
     async fn use_database(&self, database: &str) -> Result<(), String>;
+    async fn insert_row(&self, table: &str, values: &[CellValue]) -> Result<u64, String>;
+    async fn update_row(
+        &self,
+        table: &str,
+        changes: &[CellValue],
+        keys: &[CellValue],
+    ) -> Result<u64, String>;
+    async fn delete_row(&self, table: &str, keys: &[CellValue]) -> Result<u64, String>;
 }

@@ -264,6 +264,49 @@ impl AppState {
         .map_err(|e| format!("join error: {e}"))?
     }
 
+    pub async fn insert_row(
+        &self,
+        table: &str,
+        values: Vec<crate::db::driver::CellValue>,
+    ) -> Result<u64, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let table = table.to_string();
+        spawn_tokio(async move { driver.insert_row(&table, &values).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn update_row(
+        &self,
+        table: &str,
+        changes: Vec<crate::db::driver::CellValue>,
+        keys: Vec<crate::db::driver::CellValue>,
+    ) -> Result<u64, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let table = table.to_string();
+        spawn_tokio(async move { driver.update_row(&table, &changes, &keys).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
+    pub async fn delete_row(
+        &self,
+        table: &str,
+        keys: Vec<crate::db::driver::CellValue>,
+    ) -> Result<u64, String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let table = table.to_string();
+        spawn_tokio(async move { driver.delete_row(&table, &keys).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+
     pub async fn list_columns(
         &self,
         database: &str,
