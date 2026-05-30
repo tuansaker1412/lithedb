@@ -404,6 +404,32 @@ impl MainWindow {
                 tab.grid.delete_row_button.connect_clicked(move |_| {
                     this2.confirm_delete_row(&tab_for_delete);
                 });
+
+                let this_edit = self.clone_refs();
+                let tab_menu_edit = tab.clone();
+                let this_dup = self.clone_refs();
+                let tab_menu_dup = tab.clone();
+                let this_del = self.clone_refs();
+                let tab_menu_del = tab.clone();
+                tab.grid.set_row_menu_callbacks(
+                    move || {
+                        if let Some(current) = tab_menu_edit.grid.selected_row_values() {
+                            this_edit
+                                .open_row_editor(&tab_menu_edit, RowEditorMode::Edit { current });
+                        }
+                    },
+                    move || {
+                        if let Some(current) = tab_menu_dup.grid.selected_row_values() {
+                            this_dup.open_row_editor(
+                                &tab_menu_dup,
+                                RowEditorMode::Duplicate { current },
+                            );
+                        }
+                    },
+                    move || {
+                        this_del.confirm_delete_row(&tab_menu_del);
+                    },
+                );
             }
             TableTabKind::QueryResult => {
                 tab.grid.set_crud_visible(false);
@@ -1188,6 +1214,7 @@ impl MainWindow {
         let title = match &mode {
             RowEditorMode::Insert => format!("Add row to {}", tbl),
             RowEditorMode::Edit { .. } => format!("Edit row in {}", tbl),
+            RowEditorMode::Duplicate { .. } => format!("Duplicate row in {}", tbl),
         };
         glib::spawn_future_local(async move {
             let columns = match this2.state.list_columns(&db, &tbl).await {
@@ -1202,9 +1229,14 @@ impl MainWindow {
                 }
             };
 
-            let is_insert = matches!(mode, RowEditorMode::Insert);
+            let is_insert = matches!(
+                mode,
+                RowEditorMode::Insert | RowEditorMode::Duplicate { .. }
+            );
             let original_row = match &mode {
-                RowEditorMode::Edit { current } => Some(current.clone()),
+                RowEditorMode::Edit { current } | RowEditorMode::Duplicate { current } => {
+                    Some(current.clone())
+                }
                 RowEditorMode::Insert => None,
             };
 

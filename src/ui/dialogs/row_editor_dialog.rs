@@ -9,6 +9,7 @@ use crate::db::driver::{CellValue, ColumnInfo};
 pub enum RowEditorMode {
     Insert,
     Edit { current: Vec<Option<String>> },
+    Duplicate { current: Vec<Option<String>> },
 }
 
 pub struct RowEditResult {
@@ -68,9 +69,14 @@ impl RowEditorDialog {
         outer.append(&scrolled);
         content.append(&outer);
 
-        let is_insert = matches!(mode, RowEditorMode::Insert);
+        let is_insert = matches!(
+            mode,
+            RowEditorMode::Insert | RowEditorMode::Duplicate { .. }
+        );
         let current = match &mode {
-            RowEditorMode::Edit { current } => Some(current.clone()),
+            RowEditorMode::Edit { current } | RowEditorMode::Duplicate { current } => {
+                Some(current.clone())
+            }
             RowEditorMode::Insert => None,
         };
 

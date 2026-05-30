@@ -21,6 +21,27 @@ button.tpl-pill {
     padding-left: 14px;
     padding-right: 14px;
 }
+.tpl-row-menu {
+    padding: 4px;
+    min-width: 168px;
+}
+button.tpl-menu-item {
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+button.tpl-menu-item:hover {
+    background-color: alpha(@accent_bg_color, 0.16);
+}
+button.tpl-menu-item:active {
+    background-color: alpha(@accent_bg_color, 0.28);
+}
+button.tpl-menu-item-destructive:hover {
+    background-color: alpha(@destructive_bg_color, 0.20);
+    color: @destructive_fg_color;
+}
+button.tpl-menu-item-destructive:active {
+    background-color: alpha(@destructive_bg_color, 0.34);
+}
 ";
 
 fn load_css() {
