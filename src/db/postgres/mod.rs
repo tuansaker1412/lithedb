@@ -1,155 +1,36 @@
-use std::sync::Arc;
-use std::time::Instant;
+pub(super) use std::sync::Arc;
+pub(super) use std::time::Instant;
 
-use async_trait::async_trait;
-use futures_util::TryStreamExt;
-use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlSslMode};
-use sqlx::{Column, MySqlPool, Row, TypeInfo};
-use tokio::sync::Mutex;
+pub(super) use async_trait::async_trait;
+pub(super) use futures_util::TryStreamExt;
+pub(super) use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
+pub(super) use sqlx::{Column, PgPool, Row, TypeInfo};
+pub(super) use tokio::sync::Mutex;
 
-use super::driver::{
+pub(super) use super::driver::{
     CellValue, ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
 };
-use crate::config::settings;
+pub(super) use crate::config::settings;
+
+mod pool;
+mod value;
 
 #[derive(Default)]
-pub struct MySqlDriver {
-    pool: Arc<Mutex<Option<MySqlPool>>>,
+pub struct PostgresDriver {
+    pool: Arc<Mutex<Option<PgPool>>>,
     config: Arc<Mutex<Option<ConnectionConfig>>>,
 }
 
-impl MySqlDriver {
+impl PostgresDriver {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    fn connect_options(config: &ConnectionConfig) -> MySqlConnectOptions {
-        let mut opts = MySqlConnectOptions::new()
-            .host(&config.host)
-            .port(config.port)
-            .username(&config.username)
-            .ssl_mode(if config.ssl {
-                MySqlSslMode::Required
-            } else {
-                MySqlSslMode::Disabled
-            });
-        if !config.password.is_empty() {
-            opts = opts.password(&config.password);
-        }
-        if !config.database.is_empty() {
-            opts = opts.database(&config.database);
-        }
-        opts
-    }
-
-    fn quote_ident(ident: &str) -> String {
-        format!("`{}`", ident.replace('`', "``"))
-    }
-
-    async fn get_pool(&self) -> Result<MySqlPool, String> {
-        let guard = self.pool.lock().await;
-        guard.clone().ok_or_else(|| "not connected".to_string())
-    }
-
-    fn row_to_strings(row: &sqlx::mysql::MySqlRow) -> Vec<Option<String>> {
-        row.columns()
-            .iter()
-            .enumerate()
-            .map(|(idx, col)| Self::value_to_string(row, idx, col.type_info().name()))
-            .collect()
-    }
-
-    fn value_to_string(row: &sqlx::mysql::MySqlRow, idx: usize, type_name: &str) -> Option<String> {
-        let upper = type_name.to_ascii_uppercase();
-        match upper.as_str() {
-            "BOOLEAN" | "BOOL" | "TINYINT(1)" | "TINYINT" => row
-                .try_get::<Option<i8>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "SMALLINT" => row
-                .try_get::<Option<i16>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "MEDIUMINT" | "INT" | "INTEGER" => row
-                .try_get::<Option<i32>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "BIGINT" => row
-                .try_get::<Option<i64>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "TINYINT UNSIGNED" => row
-                .try_get::<Option<u8>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "SMALLINT UNSIGNED" => row
-                .try_get::<Option<u16>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "MEDIUMINT UNSIGNED" | "INT UNSIGNED" => row
-                .try_get::<Option<u32>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "BIGINT UNSIGNED" => row
-                .try_get::<Option<u64>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "FLOAT" => row
-                .try_get::<Option<f32>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "DOUBLE" => row
-                .try_get::<Option<f64>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "VARBINARY" | "BINARY" => row
-                .try_get::<Option<Vec<u8>>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| format!("0x{}", hex::encode(v))),
-            "DATE" => row
-                .try_get::<Option<chrono::NaiveDate>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "TIME" => row
-                .try_get::<Option<chrono::NaiveTime>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "DATETIME" | "TIMESTAMP" => row
-                .try_get::<Option<chrono::NaiveDateTime>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.format("%Y-%m-%d %H:%M:%S%.f").to_string()),
-            _ => row
-                .try_get::<Option<String>, _>(idx)
-                .ok()
-                .flatten()
-                .or_else(|| {
-                    row.try_get::<Option<i64>, _>(idx)
-                        .ok()
-                        .flatten()
-                        .map(|v| v.to_string())
-                }),
-        }
     }
 }
 
 #[async_trait]
-impl DatabaseDriver for MySqlDriver {
+impl DatabaseDriver for PostgresDriver {
     async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), String> {
-        let pool = MySqlPoolOptions::new()
+        let pool = PgPoolOptions::new()
             .max_connections(1)
             .connect_with(Self::connect_options(config))
             .await
@@ -163,7 +44,7 @@ impl DatabaseDriver for MySqlDriver {
     }
 
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), String> {
-        let pool = MySqlPoolOptions::new()
+        let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect_with(Self::connect_options(config))
             .await
@@ -182,10 +63,12 @@ impl DatabaseDriver for MySqlDriver {
 
     async fn list_databases(&self) -> Result<Vec<String>, String> {
         let pool = self.get_pool().await?;
-        let rows = sqlx::query("SHOW DATABASES")
-            .fetch_all(&pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        let rows = sqlx::query(
+            "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
         Ok(rows
             .iter()
             .filter_map(|r| r.try_get::<String, _>(0).ok())
@@ -193,14 +76,14 @@ impl DatabaseDriver for MySqlDriver {
     }
 
     async fn list_tables(&self, database: &str) -> Result<Vec<String>, String> {
-        let pool = self.get_pool().await?;
+        let pool = self.pool_for_database(database).await?;
         let rows = sqlx::query(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name",
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name",
         )
-        .bind(database)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
+        pool.close().await;
 
         Ok(rows
             .iter()
@@ -213,14 +96,23 @@ impl DatabaseDriver for MySqlDriver {
         let rows = sqlx::query(
             r#"
             SELECT
-                column_name,
-                column_type,
-                is_nullable='YES' AS nullable,
-                column_key='PRI' AS is_primary_key,
-                extra LIKE '%auto_increment%' AS auto_increment
-            FROM information_schema.columns
-            WHERE table_schema = ? AND table_name = ?
-            ORDER BY ordinal_position
+                c.column_name,
+                pg_catalog.format_type(att.atttypid, att.atttypmod) AS full_type,
+                (c.is_nullable = 'YES') AS nullable,
+                EXISTS (
+                    SELECT 1
+                    FROM pg_constraint con
+                    WHERE con.contype = 'p'
+                      AND con.conrelid = rel.oid
+                      AND att.attnum = ANY(con.conkey)
+                ) AS is_primary_key,
+                (c.is_identity = 'YES' OR c.column_default LIKE 'nextval(%') AS auto_increment
+            FROM information_schema.columns c
+            JOIN pg_namespace nsp ON nsp.nspname = c.table_schema
+            JOIN pg_class rel ON rel.relname = c.table_name AND rel.relnamespace = nsp.oid
+            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attname = c.column_name
+            WHERE c.table_catalog=$1 AND c.table_schema='public' AND c.table_name=$2
+            ORDER BY c.ordinal_position
             "#,
         )
         .bind(database)
@@ -246,22 +138,29 @@ impl DatabaseDriver for MySqlDriver {
         database: &str,
         table: &str,
     ) -> Result<Vec<ForeignKeyInfo>, String> {
+        let _ = database;
         let pool = self.get_pool().await?;
         let rows = sqlx::query(
             r#"
             SELECT
-                constraint_name,
-                column_name,
-                referenced_table_name,
-                referenced_column_name
-            FROM information_schema.key_column_usage
-            WHERE table_schema = ?
-              AND table_name = ?
-              AND referenced_table_name IS NOT NULL
-            ORDER BY constraint_name, ordinal_position
+                con.conname AS name,
+                att.attname AS column_name,
+                ref_rel.relname AS referenced_table,
+                ref_att.attname AS referenced_column
+            FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+            JOIN unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE
+            JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = k.attnum
+            JOIN pg_class ref_rel ON ref_rel.oid = con.confrelid
+            JOIN unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord) ON fk.ord = k.ord
+            JOIN pg_attribute ref_att ON ref_att.attrelid = ref_rel.oid AND ref_att.attnum = fk.attnum
+            WHERE con.contype = 'f'
+              AND nsp.nspname = 'public'
+              AND rel.relname = $1
+            ORDER BY con.conname, k.ord
             "#,
         )
-        .bind(database)
         .bind(table)
         .fetch_all(&pool)
         .await
@@ -279,42 +178,41 @@ impl DatabaseDriver for MySqlDriver {
     }
 
     async fn list_indexes(&self, database: &str, table: &str) -> Result<Vec<IndexInfo>, String> {
+        let _ = database;
         let pool = self.get_pool().await?;
         let rows = sqlx::query(
             r#"
             SELECT
-                index_name,
-                non_unique,
-                column_name,
-                seq_in_index
-            FROM information_schema.statistics
-            WHERE table_schema = ?
-              AND table_name = ?
-            ORDER BY index_name, seq_in_index
+                ic.relname AS name,
+                bool_or(ix.indisunique) AS is_unique,
+                bool_or(ix.indisprimary) AS is_primary,
+                array_agg(att.attname ORDER BY k.ord) AS columns
+            FROM pg_index ix
+            JOIN pg_class ic ON ic.oid = ix.indexrelid
+            JOIN pg_class tc ON tc.oid = ix.indrelid
+            JOIN pg_namespace nsp ON nsp.oid = tc.relnamespace
+            JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE
+            JOIN pg_attribute att ON att.attrelid = tc.oid AND att.attnum = k.attnum
+            WHERE nsp.nspname = 'public'
+              AND tc.relname = $1
+            GROUP BY ic.relname
+            ORDER BY ic.relname
             "#,
         )
-        .bind(database)
         .bind(table)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-        let mut indexes: Vec<IndexInfo> = Vec::new();
-        for r in rows.iter() {
-            let name = r.try_get::<String, _>(0).unwrap_or_default();
-            let non_unique = r.try_get::<i64, _>(1).unwrap_or(1);
-            let column = r.try_get::<String, _>(2).unwrap_or_default();
-            match indexes.iter_mut().find(|ix| ix.name == name) {
-                Some(ix) => ix.columns.push(column),
-                None => indexes.push(IndexInfo {
-                    name: name.clone(),
-                    columns: vec![column],
-                    unique: non_unique == 0,
-                    primary: name == "PRIMARY",
-                }),
-            }
-        }
-        Ok(indexes)
+        Ok(rows
+            .iter()
+            .map(|r| IndexInfo {
+                name: r.try_get::<String, _>(0).unwrap_or_default(),
+                unique: r.try_get::<bool, _>(1).unwrap_or(false),
+                primary: r.try_get::<bool, _>(2).unwrap_or(false),
+                columns: r.try_get::<Vec<String>, _>(3).unwrap_or_default(),
+            })
+            .collect())
     }
 
     async fn execute_query(&self, sql: &str) -> Result<QueryResult, String> {
@@ -373,6 +271,7 @@ impl DatabaseDriver for MySqlDriver {
         limit: u64,
         order_by: Option<(&str, bool)>,
     ) -> Result<QueryResult, String> {
+        let pool = self.get_pool().await?;
         let order_clause = order_by
             .map(|(col, asc)| {
                 format!(
@@ -383,10 +282,9 @@ impl DatabaseDriver for MySqlDriver {
             })
             .unwrap_or_default();
 
-        let pool = self.get_pool().await?;
-        let meta = sqlx::query(
-            "SELECT column_name, data_type FROM information_schema.columns \
-             WHERE table_schema = DATABASE() AND table_name = ? \
+        let columns = sqlx::query(
+            "SELECT column_name FROM information_schema.columns \
+             WHERE table_schema = current_schema() AND table_name = $1 \
              ORDER BY ordinal_position",
         )
         .bind(table)
@@ -394,38 +292,17 @@ impl DatabaseDriver for MySqlDriver {
         .await
         .map_err(|e| e.to_string())?;
 
-        let cols: Vec<(String, String)> = meta
+        let column_names: Vec<String> = columns
             .iter()
-            .filter_map(|r| {
-                let name = r.try_get::<String, _>(0).ok()?;
-                let dtype = r.try_get::<String, _>(1).unwrap_or_default();
-                Some((name, dtype))
-            })
+            .filter_map(|r| r.try_get::<String, _>(0).ok())
             .collect();
 
-        let select_list = if cols.is_empty() {
+        let select_list = if column_names.is_empty() {
             "*".to_string()
         } else {
-            cols.iter()
-                .map(|(name, dtype)| {
-                    let ident = Self::quote_ident(name);
-                    let lower = dtype.to_ascii_lowercase();
-                    let is_binary = matches!(
-                        lower.as_str(),
-                        "blob"
-                            | "tinyblob"
-                            | "mediumblob"
-                            | "longblob"
-                            | "binary"
-                            | "varbinary"
-                            | "bit"
-                    );
-                    if is_binary {
-                        format!("CONCAT('0x', HEX({ident})) AS {ident}")
-                    } else {
-                        format!("CAST({ident} AS CHAR) AS {ident}")
-                    }
-                })
+            column_names
+                .iter()
+                .map(|c| format!("{col}::text AS {col}", col = Self::quote_ident(c),))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -452,7 +329,10 @@ impl DatabaseDriver for MySqlDriver {
             .map(|v| Self::quote_ident(&v.column))
             .collect::<Vec<_>>()
             .join(", ");
-        let placeholders = vec!["?"; values.len()].join(", ");
+        let placeholders = (1..=values.len())
+            .map(|i| format!("${}", i))
+            .collect::<Vec<_>>()
+            .join(", ");
         let sql = format!(
             "INSERT INTO {} ({}) VALUES ({})",
             Self::quote_ident(table),
@@ -480,27 +360,30 @@ impl DatabaseDriver for MySqlDriver {
             return Err("no key to identify the row".to_string());
         }
         let pool = self.get_pool().await?;
+        let mut idx = 1;
         let set_clause = changes
             .iter()
-            .map(|c| format!("{} = ?", Self::quote_ident(&c.column)))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let where_clause = keys
-            .iter()
-            .map(|k| {
-                if k.value.is_none() {
-                    format!("{} IS NULL", Self::quote_ident(&k.column))
-                } else {
-                    format!("{} = ?", Self::quote_ident(&k.column))
-                }
+            .map(|c| {
+                let frag = format!("{} = ${}", Self::quote_ident(&c.column), idx);
+                idx += 1;
+                frag
             })
             .collect::<Vec<_>>()
-            .join(" AND ");
+            .join(", ");
+        let mut where_parts = Vec::new();
+        for k in keys {
+            if k.value.is_none() {
+                where_parts.push(format!("{} IS NULL", Self::quote_ident(&k.column)));
+            } else {
+                where_parts.push(format!("{} = ${}", Self::quote_ident(&k.column), idx));
+                idx += 1;
+            }
+        }
         let sql = format!(
             "UPDATE {} SET {} WHERE {}",
             Self::quote_ident(table),
             set_clause,
-            where_clause
+            where_parts.join(" AND ")
         );
         let mut query = sqlx::query(&sql);
         for c in changes {
@@ -520,21 +403,20 @@ impl DatabaseDriver for MySqlDriver {
             return Err("no key to identify the row".to_string());
         }
         let pool = self.get_pool().await?;
-        let where_clause = keys
-            .iter()
-            .map(|k| {
-                if k.value.is_none() {
-                    format!("{} IS NULL", Self::quote_ident(&k.column))
-                } else {
-                    format!("{} = ?", Self::quote_ident(&k.column))
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" AND ");
+        let mut idx = 1;
+        let mut where_parts = Vec::new();
+        for k in keys {
+            if k.value.is_none() {
+                where_parts.push(format!("{} IS NULL", Self::quote_ident(&k.column)));
+            } else {
+                where_parts.push(format!("{} = ${}", Self::quote_ident(&k.column), idx));
+                idx += 1;
+            }
+        }
         let sql = format!(
             "DELETE FROM {} WHERE {}",
             Self::quote_ident(table),
-            where_clause
+            where_parts.join(" AND ")
         );
         let mut query = sqlx::query(&sql);
         for k in keys {
@@ -553,7 +435,7 @@ impl DatabaseDriver for MySqlDriver {
         };
         let mut new_cfg = cfg;
         new_cfg.database = database.to_string();
-        let new_pool = MySqlPoolOptions::new()
+        let new_pool = PgPoolOptions::new()
             .max_connections(5)
             .connect_with(Self::connect_options(&new_cfg))
             .await
@@ -574,10 +456,10 @@ impl DatabaseDriver for MySqlDriver {
 
 #[cfg(test)]
 mod tests {
-    use super::MySqlDriver;
+    use super::PostgresDriver;
 
     #[test]
-    fn quote_ident_escapes_backtick() {
-        assert_eq!(MySqlDriver::quote_ident("a`b"), "`a``b`");
+    fn quote_ident_escapes_double_quote() {
+        assert_eq!(PostgresDriver::quote_ident("a\"b"), "\"a\"\"b\"");
     }
 }

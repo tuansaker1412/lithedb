@@ -6,21 +6,27 @@ This document provides guidance for contributors and AI agents working on the `t
 
 ```
 src/
-├── app.rs              # Application bootstrap and GTK initialization
-├── main.rs             # Entry point
-├── lib.rs              # Library root
-├── state/              # Application state management
+├── app.rs                    # Application bootstrap and GTK initialization
+├── main.rs                   # Entry point
+├── lib.rs                    # Library root
+├── state/
+│   └── app_state/            # Application state: mod, connections, lifecycle, data_ops
 ├── ui/
-│   ├── window.rs       # Main window orchestration
-│   ├── sidebar/        # Connection panel and schema tree
-│   ├── editor/         # SQL editor tabs with syntax highlighting
-│   ├── grid/           # Result grid, pagination, CSV export
-│   └── dialogs/        # Connection dialog and modals
-├── db/                 # Database drivers (PostgreSQL, MySQL, SQLite)
-└── config/             # Connection storage and encryption
-tests/                  # Integration tests for database drivers
-packaging/flatpak/      # Flatpak manifest and metadata
-scripts/                # Build automation scripts
+│   ├── window/               # Main window split into mod, events, query_tabs, data_tabs, crud, schema, dialogs
+│   ├── sidebar/
+│   │   ├── connection_panel/ # Connection panel: mod, render, tables, tree_utils
+│   │   └── schema_tree.rs    # Schema tree widget
+│   ├── editor/               # SQL editor tabs with syntax highlighting
+│   ├── grid/
+│   │   ├── result_grid/      # Result grid: mod, clipboard, row_menu, columns
+│   │   ├── structure_view.rs # Table structure view
+│   │   └── table_tab.rs      # Table/result tab container
+│   └── dialogs/              # Connection dialog and modals
+├── db/                       # Drivers split per engine: postgres/, mysql/, sqlite/ (mod + pool + value)
+└── config/                   # Connection storage and encryption
+tests/                        # Integration tests for database drivers
+packaging/flatpak/            # Flatpak manifest and metadata
+scripts/                      # Build automation scripts
 ```
 
 ## Build, Test, and Development Commands

@@ -1,15 +1,15 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+pub(super) use std::cell::RefCell;
+pub(super) use std::rc::Rc;
+pub(super) use std::sync::{Arc, Mutex};
 
-use gtk::gdk;
-use gtk::glib;
-use gtk::pango;
-use gtk::prelude::*;
-use gtk4 as gtk;
+pub(super) use gtk::gdk;
+pub(super) use gtk::glib;
+pub(super) use gtk::pango;
+pub(super) use gtk::prelude::*;
+pub(super) use gtk4 as gtk;
 
-use crate::db::driver::QueryResult;
-use crate::ui::notify::Notifier;
+pub(super) use crate::db::driver::QueryResult;
+pub(super) use crate::ui::notify::Notifier;
 
 const MIN_COLUMN_WIDTH: i32 = 96;
 const MAX_COLUMN_WIDTH: i32 = 260;
@@ -48,6 +48,10 @@ pub struct ResultGrid {
     crud_enabled: Rc<RefCell<bool>>,
     row_menu: Rc<RefCell<RowMenuCallbacks>>,
 }
+
+mod clipboard;
+mod columns;
+mod row_menu;
 
 impl ResultGrid {
     pub fn new() -> Self {
@@ -416,281 +420,5 @@ impl ResultGrid {
                 truncated_note
             ));
         }
-    }
-
-    pub fn wire_copy_actions(&self) {
-        {
-            let this = self.clone();
-            self.copy_cell_button.connect_clicked(move |_| {
-                if let Some(r_idx) = *this.selected_row.lock().expect("row lock poisoned") {
-                    if let Some(res) = this
-                        .last_result
-                        .lock()
-                        .expect("result lock poisoned")
-                        .clone()
-                    {
-                        if let Some(row) = res.rows.get(r_idx) {
-                            if let Some(first_val) = row.first() {
-                                let txt = first_val.clone().unwrap_or_else(|| "NULL".to_string());
-                                this.copy_to_clipboard(&txt, "Cell copied to clipboard");
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        {
-            let this = self.clone();
-            self.copy_row_json_button.connect_clicked(move |_| {
-                if let Some(r_idx) = *this.selected_row.lock().expect("row lock poisoned") {
-                    if let Some(res) = this
-                        .last_result
-                        .lock()
-                        .expect("result lock poisoned")
-                        .clone()
-                    {
-                        if let Some(row) = res.rows.get(r_idx) {
-                            let mut map = serde_json::Map::new();
-                            for (idx, col) in res.columns.iter().enumerate() {
-                                let val = row.get(idx).and_then(|v| v.clone());
-                                map.insert(
-                                    col.clone(),
-                                    val.map(serde_json::Value::String)
-                                        .unwrap_or(serde_json::Value::Null),
-                                );
-                            }
-                            this.copy_to_clipboard(
-                                &serde_json::Value::Object(map).to_string(),
-                                "Row copied as JSON",
-                            );
-                        }
-                    }
-                }
-            });
-        }
-
-        {
-            let this = self.clone();
-            self.copy_row_csv_button.connect_clicked(move |_| {
-                if let Some(r_idx) = *this.selected_row.lock().expect("row lock poisoned") {
-                    if let Some(res) = this
-                        .last_result
-                        .lock()
-                        .expect("result lock poisoned")
-                        .clone()
-                    {
-                        if let Some(row) = res.rows.get(r_idx) {
-                            let csv = row
-                                .iter()
-                                .map(|v| Self::csv_escape(v.clone().unwrap_or_default()))
-                                .collect::<Vec<_>>()
-                                .join(",");
-                            this.copy_to_clipboard(&csv, "Row copied as CSV");
-                        }
-                    }
-                }
-            });
-        }
-    }
-
-    pub fn set_notifier(&self, notifier: Notifier) {
-        *self.notifier.borrow_mut() = Some(notifier);
-    }
-
-    fn copy_to_clipboard(&self, text: &str, message: &str) {
-        if let Some(display) = gdk::Display::default() {
-            let clipboard = display.clipboard();
-            clipboard.set_text(text);
-            self.status_label.set_text(message);
-            if let Some(notifier) = self.notifier.borrow().as_ref() {
-                notifier.success(message);
-            }
-        }
-    }
-
-    fn csv_escape(input: String) -> String {
-        let escaped = input.replace('"', "\"\"");
-        format!("\"{}\"", escaped)
-    }
-
-    fn initial_column_width(column_name: &str) -> i32 {
-        let estimated = (column_name.chars().count() as i32 * 9) + 48;
-        estimated.clamp(MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH)
-    }
-
-    pub fn set_crud_visible(&self, visible: bool) {
-        self.add_row_button.set_visible(visible);
-        self.edit_row_button.set_visible(visible);
-        self.delete_row_button.set_visible(visible);
-        *self.crud_enabled.borrow_mut() = visible;
-    }
-
-    pub fn set_row_menu_callbacks<E, D, X>(&self, on_edit: E, on_duplicate: D, on_delete: X)
-    where
-        E: Fn() + 'static,
-        D: Fn() + 'static,
-        X: Fn() + 'static,
-    {
-        let mut menu = self.row_menu.borrow_mut();
-        menu.on_edit = Some(Rc::new(on_edit));
-        menu.on_duplicate = Some(Rc::new(on_duplicate));
-        menu.on_delete = Some(Rc::new(on_delete));
-    }
-
-    fn attach_row_menu(&self, table: &gtk::TreeView) {
-        let gesture = gtk::GestureClick::builder()
-            .button(gdk::BUTTON_SECONDARY)
-            .build();
-        gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
-
-        let crud_enabled = self.crud_enabled.clone();
-        let row_menu = self.row_menu.clone();
-        let table_for_menu = table.clone();
-        let anchor = self.root.clone();
-        gesture.connect_pressed(move |gesture, _, x, y| {
-            if !*crud_enabled.borrow() {
-                return;
-            }
-            let (bx, by) = table_for_menu.convert_widget_to_bin_window_coords(x as i32, y as i32);
-            let path = match table_for_menu.path_at_pos(bx, by) {
-                Some((Some(path), _, _, _)) => path,
-                _ => return,
-            };
-            gesture.set_state(gtk::EventSequenceState::Claimed);
-            table_for_menu.selection().select_path(&path);
-
-            let (ax, ay) = table_for_menu
-                .translate_coordinates(&anchor, x, y)
-                .unwrap_or((x, y));
-
-            let popover = Self::build_row_popover(&row_menu);
-            popover.set_parent(&anchor);
-            popover.set_pointing_to(Some(&gdk::Rectangle::new(ax as i32, ay as i32, 1, 1)));
-            popover.popup();
-        });
-
-        table.add_controller(gesture);
-    }
-
-    fn build_row_popover(row_menu: &Rc<RefCell<RowMenuCallbacks>>) -> gtk::Popover {
-        let popover = gtk::Popover::builder()
-            .position(gtk::PositionType::Bottom)
-            .has_arrow(false)
-            .build();
-        popover.add_css_class("menu");
-
-        let menu_box = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(2)
-            .build();
-        menu_box.add_css_class("tpl-row-menu");
-
-        let make_item = |icon: &str, label: &str| {
-            let item = gtk::Button::builder()
-                .css_classes(vec!["flat", "tpl-menu-item"])
-                .build();
-            let item_box = gtk::Box::builder()
-                .orientation(gtk::Orientation::Horizontal)
-                .spacing(8)
-                .build();
-            item_box.append(&gtk::Image::from_icon_name(icon));
-            let item_label = gtk::Label::builder()
-                .label(label)
-                .halign(gtk::Align::Start)
-                .hexpand(true)
-                .build();
-            item_box.append(&item_label);
-            item.set_child(Some(&item_box));
-            item
-        };
-
-        let edit_item = make_item("document-edit-symbolic", "Edit");
-        let duplicate_item = make_item("edit-copy-symbolic", "Duplicate");
-        let delete_item = make_item("user-trash-symbolic", "Delete");
-        delete_item.add_css_class("tpl-menu-item-destructive");
-
-        menu_box.append(&edit_item);
-        menu_box.append(&duplicate_item);
-        menu_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-        menu_box.append(&delete_item);
-        popover.set_child(Some(&menu_box));
-
-        let connect_item =
-            |item: &gtk::Button,
-             popover: &gtk::Popover,
-             row_menu: &Rc<RefCell<RowMenuCallbacks>>,
-             select: fn(&RowMenuCallbacks) -> Option<RowMenuCallback>| {
-                let popover = popover.clone();
-                let row_menu = row_menu.clone();
-                item.connect_clicked(move |_| {
-                    popover.popdown();
-                    if let Some(cb) = select(&row_menu.borrow()) {
-                        glib::idle_add_local_once(move || {
-                            cb();
-                        });
-                    }
-                });
-            };
-
-        connect_item(&edit_item, &popover, row_menu, |m| m.on_edit.clone());
-        connect_item(&duplicate_item, &popover, row_menu, |m| {
-            m.on_duplicate.clone()
-        });
-        connect_item(&delete_item, &popover, row_menu, |m| m.on_delete.clone());
-
-        popover.connect_closed(|p| {
-            p.unparent();
-        });
-
-        popover
-    }
-
-    pub fn columns(&self) -> Vec<String> {
-        self.last_result
-            .lock()
-            .expect("result lock poisoned")
-            .as_ref()
-            .map(|r| r.columns.clone())
-            .unwrap_or_default()
-    }
-
-    pub fn selected_row_values(&self) -> Option<Vec<Option<String>>> {
-        let idx = (*self.selected_row.lock().expect("row lock poisoned"))?;
-        let res = self
-            .last_result
-            .lock()
-            .expect("result lock poisoned")
-            .clone()?;
-        res.rows.get(idx).cloned()
-    }
-
-    pub fn current_csv(&self) -> Option<String> {
-        let res = self
-            .last_result
-            .lock()
-            .expect("result lock poisoned")
-            .clone()?;
-        let mut out = String::new();
-        if !res.columns.is_empty() {
-            out.push_str(
-                &res.columns
-                    .iter()
-                    .map(|c| Self::csv_escape(c.clone()))
-                    .collect::<Vec<_>>()
-                    .join(","),
-            );
-            out.push('\n');
-        }
-        for row in &res.rows {
-            out.push_str(
-                &row.iter()
-                    .map(|v| Self::csv_escape(v.clone().unwrap_or_default()))
-                    .collect::<Vec<_>>()
-                    .join(","),
-            );
-            out.push('\n');
-        }
-        Some(out)
     }
 }

@@ -1,17 +1,20 @@
-use std::sync::Arc;
-use std::time::Instant;
+pub(super) use std::sync::Arc;
+pub(super) use std::time::Instant;
 
-use async_trait::async_trait;
-use futures_util::TryStreamExt;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Column, Row, SqlitePool, TypeInfo};
-use std::str::FromStr;
-use tokio::sync::Mutex;
+pub(super) use async_trait::async_trait;
+pub(super) use futures_util::TryStreamExt;
+pub(super) use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+pub(super) use sqlx::{Column, Row, SqlitePool, TypeInfo};
+pub(super) use std::str::FromStr;
+pub(super) use tokio::sync::Mutex;
 
-use super::driver::{
+pub(super) use super::driver::{
     CellValue, ColumnInfo, ConnectionConfig, DatabaseDriver, ForeignKeyInfo, IndexInfo, QueryResult,
 };
-use crate::config::settings;
+pub(super) use crate::config::settings;
+
+mod pool;
+mod value;
 
 #[derive(Default)]
 pub struct SqliteDriver {
@@ -21,79 +24,6 @@ pub struct SqliteDriver {
 impl SqliteDriver {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    fn connect_options(config: &ConnectionConfig) -> Result<SqliteConnectOptions, String> {
-        let path = config.database.trim();
-        if path.is_empty() {
-            return Err("sqlite database path is empty".to_string());
-        }
-        SqliteConnectOptions::from_str(&format!("sqlite://{}", path))
-            .map(|o| o.create_if_missing(false))
-            .map_err(|e| e.to_string())
-    }
-
-    fn quote_ident(ident: &str) -> String {
-        format!("\"{}\"", ident.replace('"', "\"\""))
-    }
-
-    async fn get_pool(&self) -> Result<SqlitePool, String> {
-        let guard = self.pool.lock().await;
-        guard.clone().ok_or_else(|| "not connected".to_string())
-    }
-
-    fn row_to_strings(row: &sqlx::sqlite::SqliteRow) -> Vec<Option<String>> {
-        row.columns()
-            .iter()
-            .enumerate()
-            .map(|(idx, col)| Self::value_to_string(row, idx, col.type_info().name()))
-            .collect()
-    }
-
-    fn value_to_string(
-        row: &sqlx::sqlite::SqliteRow,
-        idx: usize,
-        type_name: &str,
-    ) -> Option<String> {
-        let upper = type_name.to_ascii_uppercase();
-        match upper.as_str() {
-            "INTEGER" | "INT" | "INT8" | "BIGINT" => row
-                .try_get::<Option<i64>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "REAL" | "FLOAT" | "DOUBLE" => row
-                .try_get::<Option<f64>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "BOOLEAN" => row
-                .try_get::<Option<bool>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| v.to_string()),
-            "BLOB" => row
-                .try_get::<Option<Vec<u8>>, _>(idx)
-                .ok()
-                .flatten()
-                .map(|v| format!("0x{}", hex::encode(v))),
-            _ => row
-                .try_get::<Option<String>, _>(idx)
-                .ok()
-                .flatten()
-                .or_else(|| {
-                    row.try_get::<Option<i64>, _>(idx)
-                        .ok()
-                        .flatten()
-                        .map(|v| v.to_string())
-                })
-                .or_else(|| {
-                    row.try_get::<Option<f64>, _>(idx)
-                        .ok()
-                        .flatten()
-                        .map(|v| v.to_string())
-                }),
-        }
     }
 }
 
