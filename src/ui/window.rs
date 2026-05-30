@@ -825,7 +825,7 @@ impl MainWindow {
                             this2
                                 .status_label
                                 .set_text(&format!("Connection failed: {}", e));
-                            this2.toast(&format!("Failed to connect: {}", e));
+                            this2.show_error(&format!("Failed to connect: {}", e));
                         }
                     }
                 });
@@ -896,7 +896,7 @@ impl MainWindow {
 
     fn load_tables_for(&self, connection_id: &str, database: &str) {
         if self.state.active_connection_id().as_deref() != Some(connection_id) {
-            self.toast("Connect to this connection before browsing tables");
+            self.show_error("Connect to this connection before browsing tables");
             return;
         }
 
@@ -920,7 +920,7 @@ impl MainWindow {
 
     fn load_table_data_from_sidebar(&self, connection_id: &str, database: &str, table: &str) {
         if self.state.active_connection_id().as_deref() != Some(connection_id) {
-            self.toast("Connect to this connection before opening a table");
+            self.show_error("Connect to this connection before opening a table");
             return;
         }
         self.focus_or_open_table_tab(connection_id, database, table);
@@ -1179,7 +1179,7 @@ impl MainWindow {
             None => return,
         };
         if self.state.active_connection_id().is_none() {
-            self.toast("No active connection");
+            self.show_error("No active connection");
             return;
         }
 
@@ -1193,11 +1193,11 @@ impl MainWindow {
             let columns = match this2.state.list_columns(&db, &tbl).await {
                 Ok(c) if !c.is_empty() => c,
                 Ok(_) => {
-                    this2.toast("Table has no columns to edit");
+                    this2.show_error("Table has no columns to edit");
                     return;
                 }
                 Err(e) => {
-                    this2.toast(&format!("Failed to load columns: {}", e));
+                    this2.show_error(&format!("Failed to load columns: {}", e));
                     return;
                 }
             };
@@ -1270,7 +1270,7 @@ impl MainWindow {
                 }
                 Err(e) => {
                     this2.status_label.set_text(&format!("Error: {}", e));
-                    this2.toast(&format!("Insert failed: {}", e));
+                    this2.show_error(&format!("Insert failed: {}", e));
                 }
             }
         });
@@ -1282,7 +1282,7 @@ impl MainWindow {
             None => return,
         };
         if keys.is_empty() {
-            self.toast("Cannot identify the row to update");
+            self.show_error("Cannot identify the row to update");
             return;
         }
         let this2 = self.clone_refs();
@@ -1301,7 +1301,7 @@ impl MainWindow {
                 }
                 Err(e) => {
                     this2.status_label.set_text(&format!("Error: {}", e));
-                    this2.toast(&format!("Update failed: {}", e));
+                    this2.show_error(&format!("Update failed: {}", e));
                 }
             }
         });
@@ -1313,7 +1313,7 @@ impl MainWindow {
             None => return,
         };
         if self.state.active_connection_id().is_none() {
-            self.toast("No active connection");
+            self.show_error("No active connection");
             return;
         }
         let row = match tab.grid.selected_row_values() {
@@ -1327,17 +1327,17 @@ impl MainWindow {
             let columns = match this2.state.list_columns(&db, &tbl).await {
                 Ok(c) if !c.is_empty() => c,
                 Ok(_) => {
-                    this2.toast("Table has no columns");
+                    this2.show_error("Table has no columns");
                     return;
                 }
                 Err(e) => {
-                    this2.toast(&format!("Failed to load columns: {}", e));
+                    this2.show_error(&format!("Failed to load columns: {}", e));
                     return;
                 }
             };
             let keys = Self::build_keys(&columns, &row);
             if keys.is_empty() {
-                this2.toast("Cannot identify the row to delete");
+                this2.show_error("Cannot identify the row to delete");
                 return;
             }
 
@@ -1385,7 +1385,7 @@ impl MainWindow {
                 }
                 Err(e) => {
                     this2.status_label.set_text(&format!("Error: {}", e));
-                    this2.toast(&format!("Delete failed: {}", e));
+                    this2.show_error(&format!("Delete failed: {}", e));
                 }
             }
         });
@@ -1415,16 +1415,18 @@ impl MainWindow {
             ],
         );
         chooser.set_current_name("export.csv");
-        let notifier = self.notifier.clone();
+        let this2 = self.clone_refs();
         chooser.connect_response(move |d, response| {
             if response == gtk::ResponseType::Accept {
                 if let Some(path) = d.file().and_then(|f| f.path()) {
                     match std::fs::write(&path, &csv) {
                         Ok(_) => {
-                            notifier.success(&format!("Exported CSV to {}", path.display()));
+                            this2
+                                .notifier
+                                .success(&format!("Exported CSV to {}", path.display()));
                         }
                         Err(e) => {
-                            notifier.error(&format!("Failed to export CSV: {}", e));
+                            this2.show_error(&format!("Failed to export CSV: {}", e));
                         }
                     }
                 }
@@ -1611,8 +1613,17 @@ impl MainWindow {
         win.present();
     }
 
-    fn toast(&self, msg: &str) {
-        self.notifier.info(msg);
+    fn show_error(&self, msg: &str) {
+        let dialog = gtk::MessageDialog::builder()
+            .transient_for(&self.window)
+            .modal(true)
+            .message_type(gtk::MessageType::Error)
+            .text("Operation failed")
+            .secondary_text(msg)
+            .build();
+        dialog.add_button("Close", gtk::ResponseType::Close);
+        dialog.connect_response(|d, _| d.close());
+        dialog.present();
     }
 
     fn clone_refs(&self) -> Self {
