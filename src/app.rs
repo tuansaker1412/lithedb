@@ -21,6 +21,30 @@ button.tpl-pill {
     padding-left: 14px;
     padding-right: 14px;
 }
+.tpl-row-editor-actions {
+    min-height: 28px;
+}
+.tpl-row-editor-actions label {
+    color: alpha(@window_fg_color, 0.7);
+}
+button.tpl-quick-action {
+    border-radius: 999px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+button.tpl-quick-action-accent {
+    background-color: alpha(@accent_bg_color, 0.14);
+    color: @accent_fg_color;
+}
+button.tpl-quick-action-accent:hover {
+    background-color: alpha(@accent_bg_color, 0.22);
+}
+button.tpl-quick-action-neutral {
+    background-color: alpha(@window_fg_color, 0.08);
+}
+button.tpl-quick-action-neutral:hover {
+    background-color: alpha(@window_fg_color, 0.14);
+}
 .tpl-row-menu {
     padding: 4px;
     min-width: 168px;

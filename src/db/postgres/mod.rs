@@ -25,6 +25,22 @@ impl PostgresDriver {
     pub fn new() -> Self {
         Self::default()
     }
+
+    fn cast_placeholder(index: usize, data_type: &str) -> String {
+        format!("CAST(${} AS {})", index, data_type.trim())
+    }
+
+    fn current_temporal_expression(value: &CellValue) -> Option<&'static str> {
+        if !value.uses_now_keyword() {
+            return None;
+        }
+        match value.temporal_kind() {
+            Some(super::driver::TemporalKind::Date) => Some("CURRENT_DATE"),
+            Some(super::driver::TemporalKind::Time) => Some("CURRENT_TIME"),
+            Some(super::driver::TemporalKind::DateTime) => Some("NOW()"),
+            None => None,
+        }
+    }
 }
 
 #[async_trait]
@@ -329,8 +345,18 @@ impl DatabaseDriver for PostgresDriver {
             .map(|v| Self::quote_ident(&v.column))
             .collect::<Vec<_>>()
             .join(", ");
-        let placeholders = (1..=values.len())
-            .map(|i| format!("${}", i))
+        let mut bind_index = 1;
+        let placeholders = values
+            .iter()
+            .map(|value| {
+                if let Some(expr) = Self::current_temporal_expression(value) {
+                    expr.to_string()
+                } else {
+                    let placeholder = Self::cast_placeholder(bind_index, &value.data_type);
+                    bind_index += 1;
+                    placeholder
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
         let sql = format!(
@@ -341,7 +367,9 @@ impl DatabaseDriver for PostgresDriver {
         );
         let mut query = sqlx::query(&sql);
         for v in values {
-            query = query.bind(v.value.clone());
+            if Self::current_temporal_expression(v).is_none() {
+                query = query.bind(v.value.clone());
+            }
         }
         let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
         Ok(done.rows_affected())
@@ -364,9 +392,17 @@ impl DatabaseDriver for PostgresDriver {
         let set_clause = changes
             .iter()
             .map(|c| {
-                let frag = format!("{} = ${}", Self::quote_ident(&c.column), idx);
-                idx += 1;
-                frag
+                if let Some(expr) = Self::current_temporal_expression(c) {
+                    format!("{} = {}", Self::quote_ident(&c.column), expr)
+                } else {
+                    let frag = format!(
+                        "{} = {}",
+                        Self::quote_ident(&c.column),
+                        Self::cast_placeholder(idx, &c.data_type)
+                    );
+                    idx += 1;
+                    frag
+                }
             })
             .collect::<Vec<_>>()
             .join(", ");
@@ -374,8 +410,14 @@ impl DatabaseDriver for PostgresDriver {
         for k in keys {
             if k.value.is_none() {
                 where_parts.push(format!("{} IS NULL", Self::quote_ident(&k.column)));
+            } else if let Some(expr) = Self::current_temporal_expression(k) {
+                where_parts.push(format!("{} = {}", Self::quote_ident(&k.column), expr));
             } else {
-                where_parts.push(format!("{} = ${}", Self::quote_ident(&k.column), idx));
+                where_parts.push(format!(
+                    "{} = {}",
+                    Self::quote_ident(&k.column),
+                    Self::cast_placeholder(idx, &k.data_type)
+                ));
                 idx += 1;
             }
         }
@@ -387,10 +429,12 @@ impl DatabaseDriver for PostgresDriver {
         );
         let mut query = sqlx::query(&sql);
         for c in changes {
-            query = query.bind(c.value.clone());
+            if Self::current_temporal_expression(c).is_none() {
+                query = query.bind(c.value.clone());
+            }
         }
         for k in keys {
-            if k.value.is_some() {
+            if k.value.is_some() && Self::current_temporal_expression(k).is_none() {
                 query = query.bind(k.value.clone());
             }
         }
@@ -408,8 +452,14 @@ impl DatabaseDriver for PostgresDriver {
         for k in keys {
             if k.value.is_none() {
                 where_parts.push(format!("{} IS NULL", Self::quote_ident(&k.column)));
+            } else if let Some(expr) = Self::current_temporal_expression(k) {
+                where_parts.push(format!("{} = {}", Self::quote_ident(&k.column), expr));
             } else {
-                where_parts.push(format!("{} = ${}", Self::quote_ident(&k.column), idx));
+                where_parts.push(format!(
+                    "{} = {}",
+                    Self::quote_ident(&k.column),
+                    Self::cast_placeholder(idx, &k.data_type)
+                ));
                 idx += 1;
             }
         }
@@ -420,7 +470,7 @@ impl DatabaseDriver for PostgresDriver {
         );
         let mut query = sqlx::query(&sql);
         for k in keys {
-            if k.value.is_some() {
+            if k.value.is_some() && Self::current_temporal_expression(k).is_none() {
                 query = query.bind(k.value.clone());
             }
         }
@@ -457,6 +507,50 @@ impl DatabaseDriver for PostgresDriver {
 #[cfg(test)]
 mod tests {
     use super::PostgresDriver;
+
+    #[test]
+    fn cast_placeholder_uses_column_type_test() {
+        assert_eq!(
+            PostgresDriver::cast_placeholder(2, "uuid"),
+            "CAST($2 AS uuid)"
+        );
+        assert_eq!(
+            PostgresDriver::cast_placeholder(3, "timestamp with time zone"),
+            "CAST($3 AS timestamp with time zone)"
+        );
+    }
+
+    #[test]
+    fn current_temporal_expression_maps_now_keyword_test() {
+        let date_value = crate::db::driver::CellValue {
+            column: "created_on".to_string(),
+            data_type: "date".to_string(),
+            value: Some("NOW()".to_string()),
+        };
+        let time_value = crate::db::driver::CellValue {
+            column: "starts_at".to_string(),
+            data_type: "time without time zone".to_string(),
+            value: Some(" NOW() ".to_string()),
+        };
+        let timestamp_value = crate::db::driver::CellValue {
+            column: "updated_at".to_string(),
+            data_type: "timestamp with time zone".to_string(),
+            value: Some("now()".to_string()),
+        };
+
+        assert_eq!(
+            PostgresDriver::current_temporal_expression(&date_value),
+            Some("CURRENT_DATE")
+        );
+        assert_eq!(
+            PostgresDriver::current_temporal_expression(&time_value),
+            Some("CURRENT_TIME")
+        );
+        assert_eq!(
+            PostgresDriver::current_temporal_expression(&timestamp_value),
+            Some("NOW()")
+        );
+    }
 
     #[test]
     fn quote_ident_escapes_double_quote() {

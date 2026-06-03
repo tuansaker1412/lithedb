@@ -25,6 +25,18 @@ impl SqliteDriver {
     pub fn new() -> Self {
         Self::default()
     }
+
+    fn current_temporal_expression(value: &CellValue) -> Option<&'static str> {
+        if !value.uses_now_keyword() {
+            return None;
+        }
+        match value.temporal_kind() {
+            Some(super::driver::TemporalKind::Date) => Some("DATE('now')"),
+            Some(super::driver::TemporalKind::Time) => Some("TIME('now')"),
+            Some(super::driver::TemporalKind::DateTime) => Some("CURRENT_TIMESTAMP"),
+            None => None,
+        }
+    }
 }
 
 #[async_trait]
@@ -255,7 +267,15 @@ impl DatabaseDriver for SqliteDriver {
             .map(|v| Self::quote_ident(&v.column))
             .collect::<Vec<_>>()
             .join(", ");
-        let placeholders = vec!["?"; values.len()].join(", ");
+        let placeholders = values
+            .iter()
+            .map(|value| {
+                Self::current_temporal_expression(value)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| "?".to_string())
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
         let sql = format!(
             "INSERT INTO {} ({}) VALUES ({})",
             Self::quote_ident(table),
@@ -264,7 +284,9 @@ impl DatabaseDriver for SqliteDriver {
         );
         let mut query = sqlx::query(&sql);
         for v in values {
-            query = query.bind(v.value.clone());
+            if Self::current_temporal_expression(v).is_none() {
+                query = query.bind(v.value.clone());
+            }
         }
         let done = query.execute(&pool).await.map_err(|e| e.to_string())?;
         Ok(done.rows_affected())
@@ -285,7 +307,13 @@ impl DatabaseDriver for SqliteDriver {
         let pool = self.get_pool().await?;
         let set_clause = changes
             .iter()
-            .map(|c| format!("{} = ?", Self::quote_ident(&c.column)))
+            .map(|c| {
+                if let Some(expr) = Self::current_temporal_expression(c) {
+                    format!("{} = {}", Self::quote_ident(&c.column), expr)
+                } else {
+                    format!("{} = ?", Self::quote_ident(&c.column))
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
         let where_clause = keys
@@ -293,6 +321,8 @@ impl DatabaseDriver for SqliteDriver {
             .map(|k| {
                 if k.value.is_none() {
                     format!("{} IS NULL", Self::quote_ident(&k.column))
+                } else if let Some(expr) = Self::current_temporal_expression(k) {
+                    format!("{} = {}", Self::quote_ident(&k.column), expr)
                 } else {
                     format!("{} = ?", Self::quote_ident(&k.column))
                 }
@@ -307,10 +337,12 @@ impl DatabaseDriver for SqliteDriver {
         );
         let mut query = sqlx::query(&sql);
         for c in changes {
-            query = query.bind(c.value.clone());
+            if Self::current_temporal_expression(c).is_none() {
+                query = query.bind(c.value.clone());
+            }
         }
         for k in keys {
-            if k.value.is_some() {
+            if k.value.is_some() && Self::current_temporal_expression(k).is_none() {
                 query = query.bind(k.value.clone());
             }
         }
@@ -328,6 +360,8 @@ impl DatabaseDriver for SqliteDriver {
             .map(|k| {
                 if k.value.is_none() {
                     format!("{} IS NULL", Self::quote_ident(&k.column))
+                } else if let Some(expr) = Self::current_temporal_expression(k) {
+                    format!("{} = {}", Self::quote_ident(&k.column), expr)
                 } else {
                     format!("{} = ?", Self::quote_ident(&k.column))
                 }
@@ -341,7 +375,7 @@ impl DatabaseDriver for SqliteDriver {
         );
         let mut query = sqlx::query(&sql);
         for k in keys {
-            if k.value.is_some() {
+            if k.value.is_some() && Self::current_temporal_expression(k).is_none() {
                 query = query.bind(k.value.clone());
             }
         }

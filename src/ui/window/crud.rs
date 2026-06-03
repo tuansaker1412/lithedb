@@ -90,6 +90,7 @@ impl MainWindow {
                 let idx = columns.iter().position(|c| c.name == col.name)?;
                 Some(CellValue {
                     column: col.name.clone(),
+                    data_type: col.data_type.clone(),
                     value: row.get(idx).cloned().flatten(),
                 })
             })
