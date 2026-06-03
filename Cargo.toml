@@ -4,6 +4,8 @@ version = "0.1.2"
 edition = "2021"
 description = "A modern, native Linux database client built with Rust, GTK4, and libadwaita"
 license = "MIT"
+homepage = "https://github.com/tuansaker1412/table-pro-linux"
+repository = "https://github.com/tuansaker1412/table-pro-linux"
 
 [dependencies]
 gtk4 = "0.7"

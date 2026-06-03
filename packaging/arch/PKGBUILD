@@ -1,10 +1,10 @@
 # Maintainer: Table Pro Linux <contact@tableprolinux.org>
 pkgname=table-pro-linux
-pkgver=0.1.0
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="A modern, native Linux database client built with Rust, GTK4, and libadwaita"
 arch=('x86_64')
-url="https://github.com/yourusername/table-pro-linux"
+url="https://github.com/tuansaker1412/table-pro-linux"
 license=('MIT')
 depends=('gtk4' 'libadwaita' 'gtksourceview5')
 makedepends=('rust' 'cargo')
