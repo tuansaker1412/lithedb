@@ -1,4 +1,4 @@
-use table_pro_linux::db::mysql::MySqlDriver;
+use lithedb::db::mysql::MySqlDriver;
 
 #[tokio::test]
 #[ignore]

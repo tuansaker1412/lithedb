@@ -1,10 +1,11 @@
 use std::sync::OnceLock;
 
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
+use crate::config::paths;
+
 pub const DEFAULT_MAX_QUERY_ROWS: u64 = 1000;
-const MAX_QUERY_ROWS_ENV: &str = "TABLE_PRO_MAX_QUERY_ROWS";
+const MAX_QUERY_ROWS_ENV: &str = "LITHEDB_MAX_QUERY_ROWS";
 
 static MAX_QUERY_ROWS: OnceLock<u64> = OnceLock::new();
 
@@ -28,10 +29,9 @@ impl Default for Settings {
 
 impl Settings {
     fn load_from_file() -> Settings {
-        let Some(proj) = ProjectDirs::from("org", "tableprolinux", "table-pro-linux") else {
+        let Ok(path) = paths::prepare_config_file("settings.json") else {
             return Settings::default();
         };
-        let path = proj.config_dir().join("settings.json");
         let Ok(content) = std::fs::read_to_string(&path) else {
             return Settings::default();
         };

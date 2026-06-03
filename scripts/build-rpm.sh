@@ -17,7 +17,7 @@ ls -lh target/generate-rpm/*.rpm
 
 echo ""
 echo "To install on Fedora/RHEL/CentOS:"
-echo "  sudo dnf install target/generate-rpm/table-pro-linux-*.rpm"
+echo "  sudo dnf install target/generate-rpm/lithedb-*.rpm"
 echo ""
 echo "To install on openSUSE:"
-echo "  sudo zypper install target/generate-rpm/table-pro-linux-*.rpm"
+echo "  sudo zypper install target/generate-rpm/lithedb-*.rpm"

@@ -186,12 +186,12 @@ impl MainWindow {
 
     pub(super) fn show_about_dialog(&self) {
         let about = adw::AboutWindow::builder()
-            .application_name("Table Pro Linux")
-            .application_icon("org.tableprolinux.App")
+            .application_name("LitheDB")
+            .application_icon("io.github.tuansaker1412.LitheDB")
             .developer_name("Ngoc Tuan")
-            .version("0.1.0-mvp")
-            .website("https://example.invalid")
-            .issue_url("https://example.invalid/issues")
+            .version(env!("CARGO_PKG_VERSION"))
+            .website("https://github.com/tuansaker1412/lithedb")
+            .issue_url("https://github.com/tuansaker1412/lithedb/issues")
             .transient_for(&self.window)
             .modal(true)
             .build();

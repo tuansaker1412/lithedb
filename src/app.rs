@@ -84,7 +84,7 @@ pub fn run() {
     adw::init().expect("failed to initialize libadwaita");
 
     let app = adw::Application::builder()
-        .application_id("org.tableprolinux.App")
+        .application_id("io.github.tuansaker1412.LitheDB")
         .build();
 
     app.connect_startup(|_| {

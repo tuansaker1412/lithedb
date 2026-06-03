@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tuansaker1412.LitheDB</id>
+  <name>LitheDB</name>
+  <summary>Lightweight native database client for Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <url type="homepage">https://github.com/tuansaker1412/lithedb</url>
+  <url type="bugtracker">https://github.com/tuansaker1412/lithedb/issues</url>
+  <developer_name>LitheDB Contributors</developer_name>
+  <description>
+    <p>LitheDB is a lightweight native database client for Linux built with GTK4, libadwaita, and Rust.</p>
+    <p>It supports PostgreSQL, MySQL, and SQLite with secure local credential storage.</p>
+  </description>
+  <launchable type="desktop-id">io.github.tuansaker1412.LitheDB.desktop</launchable>
+  <categories>
+    <category>Development</category>
+    <category>Database</category>
+  </categories>
+</component>

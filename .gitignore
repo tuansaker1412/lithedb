@@ -24,8 +24,8 @@ Thumbs.db
 .env.*
 !.env.example
 
-# table pro linux docs
-table-pro-linux-docs/
+# lithedb docs
+lithedb-docs/
 
 # Flatpak build artifacts
 build-dir/

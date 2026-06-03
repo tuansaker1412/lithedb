@@ -1,8 +1,8 @@
-# Table Pro Linux
+# LitheDB
 
-Native Linux database client built with Rust, GTK4, and libadwaita.
+Lightweight native database client for Linux built with Rust, GTK4, and libadwaita.
 
-Table Pro Linux focuses on a fast desktop workflow for PostgreSQL, MySQL, and SQLite with native Linux packaging and secure credential storage.
+LitheDB focuses on a fast desktop workflow for PostgreSQL, MySQL, and SQLite with native Linux packaging and secure credential storage.
 
 ## Features
 
@@ -18,13 +18,13 @@ Table Pro Linux focuses on a fast desktop workflow for PostgreSQL, MySQL, and SQ
 
 ## Download
 
-The recommended way to install Table Pro Linux is from **GitHub Releases**.
+The recommended way to install LitheDB is from **GitHub Releases**.
 
 Release assets should include:
 
-- `table-pro-linux_<version>_amd64.deb` for Debian/Ubuntu/Linux Mint/Pop!_OS
-- `table-pro-linux-<version>-1.x86_64.rpm` for Fedora/RHEL/openSUSE
-- `table-pro-linux-<version>-1-x86_64.pkg.tar.zst` for Arch Linux
+- `lithedb_<version>_amd64.deb` for Debian/Ubuntu/Linux Mint/Pop!_OS
+- `lithedb-<version>-1.x86_64.rpm` for Fedora/RHEL/openSUSE
+- `lithedb-<version>-1-x86_64.pkg.tar.zst` for Arch Linux
 - Optional: a Flatpak build or Flatpak bundle
 
 If you publish releases on GitHub, attach those built artifacts to each tagged release so users do not need to compile from source.
@@ -34,26 +34,26 @@ If you publish releases on GitHub, attach those built artifacts to each tagged r
 ### Debian/Ubuntu
 
 ```bash
-sudo dpkg -i table-pro-linux_*.deb
+sudo dpkg -i lithedb_*.deb
 sudo apt-get install -f
 ```
 
 ### Fedora/RHEL
 
 ```bash
-sudo dnf install ./table-pro-linux-*.rpm
+sudo dnf install ./lithedb-*.rpm
 ```
 
 ### openSUSE
 
 ```bash
-sudo zypper install ./table-pro-linux-*.rpm
+sudo zypper install ./lithedb-*.rpm
 ```
 
 ### Arch Linux
 
 ```bash
-sudo pacman -U ./table-pro-linux-*.pkg.tar.zst
+sudo pacman -U ./lithedb-*.pkg.tar.zst
 ```
 
 ### Flatpak
@@ -63,7 +63,7 @@ If you distribute a Flatpak build, install it with the command appropriate to yo
 To run the Flatpak app:
 
 ```bash
-flatpak run org.tableprolinux.App
+flatpak run io.github.tuansaker1412.LitheDB
 ```
 
 ## Build From Source
@@ -130,7 +130,7 @@ cargo build --release
 Output:
 
 ```bash
-target/release/table-pro-linux
+target/release/lithedb
 ```
 
 ## Package Builds
@@ -185,7 +185,7 @@ GitHub will also provide `Source code (zip)` and `Source code (tar.gz)` automati
 
 ## Usage
 
-1. Launch `table-pro-linux`.
+1. Launch `lithedb`.
 2. Create a connection from the sidebar.
 3. Enter database settings and connect.
 4. Browse schemas and tables.
@@ -198,8 +198,8 @@ The maximum number of rows loaded into memory for a manual SQL query is configur
 
 Priority order:
 
-1. Environment variable `TABLE_PRO_MAX_QUERY_ROWS`
-2. `~/.config/table-pro-linux/settings.json`
+1. Environment variable `LITHEDB_MAX_QUERY_ROWS`
+2. `~/.config/lithedb/settings.json`
 3. Default value: `1000`
 
 Example:
@@ -213,7 +213,7 @@ Example:
 Or:
 
 ```bash
-TABLE_PRO_MAX_QUERY_ROWS=5000 cargo run --release
+LITHEDB_MAX_QUERY_ROWS=5000 cargo run --release
 ```
 
 ## Security
@@ -221,7 +221,7 @@ TABLE_PRO_MAX_QUERY_ROWS=5000 cargo run --release
 - Passwords are never stored in plaintext
 - Primary secret storage uses the system keyring
 - Fallback storage is encrypted with AES-GCM
-- Connection metadata is stored under `~/.config/table-pro-linux/`
+- Connection metadata is stored under `~/.config/lithedb/`
 
 ## Development
 
@@ -272,7 +272,7 @@ Repository-specific contributor guidance is documented in `AGENTS.md`.
 
 ## Donate
 
-If Table Pro Linux is useful to you, consider supporting development.
+If LitheDB is useful to you, consider supporting development.
 
 PayPal link placeholder:
 

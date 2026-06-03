@@ -51,7 +51,7 @@ impl MainWindow {
 
         let window = gtk::ApplicationWindow::builder()
             .application(app)
-            .title("Table Pro Linux")
+            .title("LitheDB")
             .default_width(1200)
             .default_height(800)
             .width_request(720)

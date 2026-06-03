@@ -1,0 +1,28 @@
+app-id: io.github.tuansaker1412.LitheDB
+runtime: org.gnome.Platform
+runtime-version: '45'
+sdk: org.gnome.Sdk//45
+command: lithedb
+
+finish-args:
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --talk-name=org.freedesktop.secrets
+
+modules:
+  - name: lithedb
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml
+      - cargo build --release --manifest-path Cargo.toml
+      - install -Dm755 target/release/lithedb /app/bin/lithedb
+      - install -Dm644 packaging/flatpak/io.github.tuansaker1412.LitheDB.desktop /app/share/applications/io.github.tuansaker1412.LitheDB.desktop
+      - install -Dm644 packaging/flatpak/io.github.tuansaker1412.LitheDB.metainfo.xml /app/share/metainfo/io.github.tuansaker1412.LitheDB.metainfo.xml
+      - install -Dm644 packaging/flatpak/io.github.tuansaker1412.LitheDB.svg /app/share/icons/hicolor/scalable/apps/io.github.tuansaker1412.LitheDB.svg
+    sources:
+      - type: dir
+        path: ../..
+      - type: file
+        path: cargo-sources.json

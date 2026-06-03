@@ -5,17 +5,19 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::fs;
 
-const SERVICE: &str = "table-pro-linux";
+const SERVICE: &str = "lithedb";
+const KEY_DERIVATION_LABEL: &[u8] = b"lithedb-fallback-v1";
+const AAD_PREFIX: &str = "lithedb";
 
 fn machine_key_material() -> Option<Vec<u8>> {
     let machine_id = fs::read_to_string("/etc/machine-id").ok()?;
     Some(machine_id.trim().as_bytes().to_vec())
 }
 
-fn derive_key(connection_id: &str) -> Option<[u8; 32]> {
+fn derive_key_with_label(connection_id: &str, label: &[u8]) -> Option<[u8; 32]> {
     let machine = machine_key_material()?;
     let mut hasher = Sha256::new();
-    hasher.update(b"table-pro-linux-fallback-v1");
+    hasher.update(label);
     hasher.update(machine);
     hasher.update(connection_id.as_bytes());
     let digest = hasher.finalize();
@@ -24,8 +26,16 @@ fn derive_key(connection_id: &str) -> Option<[u8; 32]> {
     Some(out)
 }
 
+fn derive_key(connection_id: &str) -> Option<[u8; 32]> {
+    derive_key_with_label(connection_id, KEY_DERIVATION_LABEL)
+}
+
+fn aad_with_prefix(connection_id: &str, prefix: &str) -> Vec<u8> {
+    format!("{prefix}:{connection_id}:v1").into_bytes()
+}
+
 fn aad(connection_id: &str) -> Vec<u8> {
-    format!("table-pro-linux:{connection_id}:v1").into_bytes()
+    aad_with_prefix(connection_id, AAD_PREFIX)
 }
 
 fn fallback_encrypt_v1(connection_id: &str, plain: &str) -> Option<String> {
@@ -54,6 +64,10 @@ fn fallback_encrypt_v1(connection_id: &str, plain: &str) -> Option<String> {
 }
 
 fn fallback_decrypt_v1(connection_id: &str, data: &str) -> Option<String> {
+    fallback_decrypt_v1_with(data, derive_key(connection_id)?, &aad(connection_id))
+}
+
+fn fallback_decrypt_v1_with(data: &str, key: [u8; 32], aad: &[u8]) -> Option<String> {
     let mut parts = data.split(':');
     let _enc = parts.next()?;
     let version = parts.next()?;
@@ -69,7 +83,6 @@ fn fallback_decrypt_v1(connection_id: &str, data: &str) -> Option<String> {
     }
     let cipher_bytes = hex::decode(cipher_hex).ok()?;
 
-    let key = derive_key(connection_id)?;
     let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let plaintext = cipher
@@ -77,22 +90,11 @@ fn fallback_decrypt_v1(connection_id: &str, data: &str) -> Option<String> {
             nonce,
             Payload {
                 msg: cipher_bytes.as_ref(),
-                aad: &aad(connection_id),
+                aad,
             },
         )
         .ok()?;
 
-    String::from_utf8(plaintext).ok()
-}
-
-// Backward compatibility for old fallback format.
-fn fallback_decrypt_legacy_enc01(connection_id: &str, data: &str) -> Option<String> {
-    let raw = data.strip_prefix("enc:01")?;
-    let bytes = hex::decode(raw).ok()?;
-    let key = derive_key(connection_id)?;
-    let cipher = Aes256Gcm::new_from_slice(&key).ok()?;
-    let nonce = Nonce::from_slice(b"tplinuxnonc1");
-    let plaintext = cipher.decrypt(nonce, bytes.as_ref()).ok()?;
     String::from_utf8(plaintext).ok()
 }
 
@@ -112,14 +114,15 @@ pub fn store_password(id: &str, password: &str) -> Result<(), String> {
 }
 
 pub fn load_password(id: &str) -> Option<String> {
-    let entry = keyring::Entry::new(SERVICE, id).ok()?;
-    if let Ok(v) = entry.get_password() {
-        return Some(v);
+    if let Ok(entry) = keyring::Entry::new(SERVICE, id) {
+        if let Ok(value) = entry.get_password() {
+            return Some(value);
+        }
     }
 
     let fallback = keyring::Entry::new(SERVICE, &fallback_key(id)).ok()?;
     let encrypted = fallback.get_password().ok()?;
-    fallback_decrypt_v1(id, &encrypted).or_else(|| fallback_decrypt_legacy_enc01(id, &encrypted))
+    fallback_decrypt_v1(id, &encrypted)
 }
 
 pub fn delete_password(id: &str) -> Result<(), String> {
@@ -158,19 +161,5 @@ mod tests {
     fn fallback_crypto_binds_to_connection_id() {
         let encrypted = fallback_encrypt_v1("conn-c", "secret").expect("encrypt failed");
         assert!(fallback_decrypt_v1("conn-other", &encrypted).is_none());
-    }
-
-    #[test]
-    fn legacy_enc01_is_still_supported() {
-        let id = "conn-legacy";
-        let key = derive_key(id).expect("key");
-        let cipher = Aes256Gcm::new_from_slice(&key).expect("cipher");
-        let nonce = Nonce::from_slice(b"tplinuxnonc1");
-        let ciphertext = cipher
-            .encrypt(nonce, b"legacy-secret".as_ref())
-            .expect("enc");
-        let legacy = format!("enc:01{}", hex::encode(ciphertext));
-        let decrypted = fallback_decrypt_legacy_enc01(id, &legacy).expect("dec");
-        assert_eq!(decrypted, "legacy-secret");
     }
 }

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="18" y1="14" x2="110" y2="118" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#173557"/>
+      <stop offset="1" stop-color="#0b1627"/>
+    </linearGradient>
+    <linearGradient id="db" x1="35" y1="32" x2="93" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#74f0df"/>
+      <stop offset="1" stop-color="#1eb8a8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <path
+    d="M31 38v34c0 10.493 14.774 19 33 19s33-8.507 33-19V38Z"
+    fill="url(#db)"
+  />
+  <ellipse cx="64" cy="38" rx="33" ry="15" fill="#8df7e8"/>
+  <ellipse cx="64" cy="72" rx="33" ry="15" fill="#21a99b"/>
+  <ellipse cx="64" cy="38" rx="23" ry="9" fill="#c8fff7" opacity="0.72"/>
+  <path
+    d="M82 42.5c5.523 2.32 9 5.771 9 9.5s-3.477 7.18-9 9.5"
+    fill="none"
+    stroke="#c8fff7"
+    stroke-linecap="round"
+    stroke-width="5"
+    opacity="0.78"
+  />
+  <path
+    d="M48 47a5 5 0 0 1 5-5h6v24h17a5 5 0 0 1 0 10H53a5 5 0 0 1-5-5Z"
+    fill="#10243d"
+  />
+  <path
+    d="M44 92c5.648 3.019 12.631 4.75 20 4.75S78.352 95.019 84 92"
+    fill="none"
+    stroke="#0e1d31"
+    stroke-linecap="round"
+    stroke-width="5"
+    opacity="0.48"
+  />
+</svg>

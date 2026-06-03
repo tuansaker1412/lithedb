@@ -1,4 +1,4 @@
-use table_pro_linux::db::sqlite::SqliteDriver;
+use lithedb::db::sqlite::SqliteDriver;
 
 #[tokio::test]
 #[ignore]

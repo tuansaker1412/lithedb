@@ -1,10 +1,10 @@
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 
 use crate::config::crypto;
+use crate::config::paths;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DriverType {
@@ -38,12 +38,8 @@ pub struct ConnectionStore {
 
 impl ConnectionStore {
     pub fn new() -> io::Result<Self> {
-        let proj = ProjectDirs::from("org", "tableprolinux", "table-pro-linux")
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "XDG config dir not found"))?;
-        let dir = proj.config_dir();
-        fs::create_dir_all(dir)?;
         Ok(Self {
-            path: dir.join("connections.json"),
+            path: paths::prepare_config_file("connections.json")?,
         })
     }
 
@@ -121,8 +117,7 @@ mod tests {
 
     #[test]
     fn save_load_round_trip_without_serializing_password() {
-        let tempdir =
-            std::env::temp_dir().join(format!("table-pro-linux-test-{}", std::process::id()));
+        let tempdir = std::env::temp_dir().join(format!("lithedb-test-{}", std::process::id()));
         let _ = fs::create_dir_all(&tempdir);
         let file = tempdir.join("connections.json");
         let store = ConnectionStore::from_path(file.clone());

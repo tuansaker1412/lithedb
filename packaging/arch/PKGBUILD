@@ -1,10 +1,10 @@
-# Maintainer: Table Pro Linux <contact@tableprolinux.org>
-pkgname=table-pro-linux
+# Maintainer: LitheDB Contributors <contact@lithedb.dev>
+pkgname=lithedb
 pkgver=0.1.2
 pkgrel=1
-pkgdesc="A modern, native Linux database client built with Rust, GTK4, and libadwaita"
+pkgdesc="LitheDB is a lightweight native database client for Linux built with Rust, GTK4, and libadwaita"
 arch=('x86_64')
-url="https://github.com/tuansaker1412/table-pro-linux"
+url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')
 depends=('gtk4' 'libadwaita' 'gtksourceview5' 'sqlite')
 makedepends=('rust' 'cargo')
@@ -24,19 +24,19 @@ package() {
     cd "$srcdir/../../../"
     
     # Install binary
-    install -Dm755 "target/release/table-pro-linux" "$pkgdir/usr/bin/table-pro-linux"
+    install -Dm755 "target/release/lithedb" "$pkgdir/usr/bin/lithedb"
     
     # Install desktop file
-    install -Dm644 "packaging/flatpak/org.tableprolinux.App.desktop" \
-        "$pkgdir/usr/share/applications/org.tableprolinux.App.desktop"
+    install -Dm644 "packaging/flatpak/io.github.tuansaker1412.LitheDB.desktop" \
+        "$pkgdir/usr/share/applications/io.github.tuansaker1412.LitheDB.desktop"
     
     # Install icon
-    install -Dm644 "packaging/flatpak/org.tableprolinux.App.svg" \
-        "$pkgdir/usr/share/icons/hicolor/scalable/apps/org.tableprolinux.App.svg"
+    install -Dm644 "packaging/flatpak/io.github.tuansaker1412.LitheDB.svg" \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.tuansaker1412.LitheDB.svg"
     
     # Install metainfo
-    install -Dm644 "packaging/flatpak/org.tableprolinux.App.metainfo.xml" \
-        "$pkgdir/usr/share/metainfo/org.tableprolinux.App.metainfo.xml"
+    install -Dm644 "packaging/flatpak/io.github.tuansaker1412.LitheDB.metainfo.xml" \
+        "$pkgdir/usr/share/metainfo/io.github.tuansaker1412.LitheDB.metainfo.xml"
     
     # Install documentation
     install -Dm644 "README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"

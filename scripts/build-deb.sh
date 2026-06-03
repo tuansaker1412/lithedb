@@ -17,7 +17,7 @@ ls -lh target/debian/*.deb
 
 echo ""
 echo "To install:"
-echo "  sudo dpkg -i target/debian/table-pro-linux_*.deb"
+echo "  sudo dpkg -i target/debian/lithedb_*.deb"
 echo ""
 echo "To install dependencies if needed:"
 echo "  sudo apt-get install -f"

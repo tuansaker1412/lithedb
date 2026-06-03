@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="18" y1="16" x2="110" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4ece5"/>
+      <stop offset="1" stop-color="#e7d8ca"/>
+    </linearGradient>
+    <linearGradient id="mocha" x1="36" y1="28" x2="92" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b18872"/>
+      <stop offset="1" stop-color="#8f6956"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+
+  <path d="M36 38v34c0 10.493 12.536 19 28 19s28-8.507 28-19V38Z" fill="url(#mocha)"/>
+  <ellipse cx="64" cy="38" rx="28" ry="13" fill="#bc927c"/>
+  <ellipse cx="64" cy="72" rx="28" ry="13" fill="#8a6553"/>
+
+  <path
+    d="M50 46a4 4 0 0 1 4-4h7v28h16a4 4 0 0 1 0 8H54a4 4 0 0 1-4-4Z"
+    fill="#fffaf5"
+  />
+
+  <ellipse cx="64" cy="38" rx="18" ry="7.5" fill="#d9b8a2" opacity="0.65"/>
+</svg>

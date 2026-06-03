@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-This document provides guidance for contributors and AI agents working on the `table-pro-linux` project—a native Linux database client built with Rust, GTK4, and libadwaita.
+This document provides guidance for contributors and AI agents working on the `lithedb` project—a native Linux database client built with Rust, GTK4, and libadwaita.
 
 ## Project Structure & Module Organization
 
@@ -48,7 +48,7 @@ cargo test db_postgres -- --ignored           # Run specific database tests
 **Flatpak packaging:**
 ```bash
 ./scripts/build-flatpak.sh                    # Build and install Flatpak package
-flatpak run org.table-pro-linux.App                  # Run the installed Flatpak
+flatpak run io.github.tuansaker1412.LitheDB         # Run the installed Flatpak
 ```
 
 **Linting and formatting:**
@@ -108,7 +108,7 @@ Examples from history:
 
 - **Credentials:** Never commit passwords or API keys; use keyring or encrypted storage
 - **Connection storage:** Passwords are stored via system keyring (primary) or AES-GCM encrypted fallback
-- **Config location:** `~/.config/table-pro-linux/connections.json` (encrypted format)
+- **Config location:** `~/.config/lithedb/connections.json`
 - **Logging:** Use `log` crate macros (`info!`, `warn!`, `error!`); initialize with `env_logger`
 - **Dependencies:** Pin versions in `Cargo.toml`; audit with `cargo audit` periodically
 

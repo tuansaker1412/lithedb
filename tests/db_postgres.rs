@@ -1,4 +1,4 @@
-use table_pro_linux::db::postgres::PostgresDriver;
+use lithedb::db::postgres::PostgresDriver;
 
 #[tokio::test]
 #[ignore]

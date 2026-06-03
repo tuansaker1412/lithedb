@@ -21,4 +21,4 @@ ls -lh *.pkg.tar.zst
 
 echo ""
 echo "To install:"
-echo "  sudo pacman -U table-pro-linux-*.pkg.tar.zst"
+echo "  sudo pacman -U lithedb-*.pkg.tar.zst"

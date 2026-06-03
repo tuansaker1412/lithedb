@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Table Pro Linux
-Exec=table-pro-linux
-Icon=org.tableprolinux.App
+Name=LitheDB
+Exec=lithedb
+Icon=io.github.tuansaker1412.LitheDB
 Type=Application
 Categories=Development;Database;
-StartupWMClass=org.tableprolinux.App
+StartupWMClass=io.github.tuansaker1412.LitheDB
 MimeType=text/plain;text/csv;application/sql;
 Terminal=false
