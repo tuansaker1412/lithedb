@@ -117,7 +117,9 @@ jobs:
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Build .pkg.tar.zst package
-        run: su builder -c "cd '$GITHUB_WORKSPACE' && ./scripts/build-arch.sh"
+        run: |
+          env -u CC -u CXX -u AR -u CFLAGS -u CXXFLAGS -u LDFLAGS -u RUSTFLAGS \
+            su builder -c "cd '$GITHUB_WORKSPACE' && ./scripts/build-arch.sh"
 
       - name: Upload Arch artifact
         uses: actions/upload-artifact@v4
