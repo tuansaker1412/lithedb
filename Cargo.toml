@@ -13,6 +13,7 @@ libadwaita = { version = "0.5", features = ["v1_2"] }
 sourceview5 = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "chrono"] }
+libsqlite3-sys = { version = "0.27", features = ["bundled"] }
 async-trait = "0.1"
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
