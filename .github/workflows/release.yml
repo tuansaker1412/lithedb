@@ -28,6 +28,7 @@ jobs:
             libadwaita-1-dev \
             libgtksourceview-5-dev \
             libsecret-1-dev \
+            libsqlite3-dev \
             libssl-dev
 
       - name: Install Rust
@@ -65,6 +66,7 @@ jobs:
             libadwaita-1-dev \
             libgtksourceview-5-dev \
             libsecret-1-dev \
+            libsqlite3-dev \
             libssl-dev
 
       - name: Install Rust
@@ -101,6 +103,7 @@ jobs:
             libadwaita \
             gtksourceview5 \
             libsecret \
+            sqlite \
             openssl \
             pkgconf \
             git

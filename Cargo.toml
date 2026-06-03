@@ -47,7 +47,7 @@ Supports PostgreSQL, MySQL, and SQLite with features including:
 - Result grid with pagination and CSV export
 - Secure connection management with keyring integration
 - Native GTK4/libadwaita interface"""
-depends = "$auto, libgtk-4-1, libadwaita-1-0, libgtksourceview-5-0"
+depends = "$auto, libgtk-4-1, libadwaita-1-0, libgtksourceview-5-0, libsqlite3-0"
 section = "database"
 priority = "optional"
 assets = [
@@ -70,3 +70,4 @@ assets = [
 gtk4 = "*"
 libadwaita = "*"
 gtksourceview5 = "*"
+sqlite = "*"
