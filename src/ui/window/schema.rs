@@ -1,10 +1,21 @@
 use super::*;
 
 impl MainWindow {
+    pub(super) fn refresh_connection_actions(&self) {
+        let active_id = self.state.active_connection_id();
+        self.panel.update_connection_actions(active_id.as_deref());
+    }
+
+    pub(super) fn show_selection_hint(&self, message: &str) {
+        self.status_label.set_text(message);
+        self.notifier.info(message);
+    }
+
     pub(super) fn refresh_list(&self) {
         let conns = self.state.connections();
         let active_id = self.state.active_connection_id();
         self.panel.set_connections(&conns, active_id.as_deref());
+        self.refresh_connection_actions();
     }
 
     pub(super) fn delete_connection(&self) {
@@ -49,11 +60,17 @@ impl MainWindow {
                     }
                 });
             }
+        } else {
+            self.show_selection_hint("Select a connection first");
         }
     }
 
     pub(super) fn disconnect_active(&self) {
         let prev_id = self.state.active_connection_id();
+        if prev_id.is_none() {
+            self.show_selection_hint("Select the active connection first");
+            return;
+        }
         let this2 = self.clone_refs();
         let prev_name = prev_id
             .as_ref()
@@ -115,7 +132,7 @@ impl MainWindow {
 
     pub(super) fn load_tables_for(&self, connection_id: &str, database: &str) {
         if self.state.active_connection_id().as_deref() != Some(connection_id) {
-            self.show_error("Connect to this connection before browsing tables");
+            self.show_selection_hint("Connect to this connection before browsing tables");
             return;
         }
 
@@ -144,7 +161,7 @@ impl MainWindow {
         table: &str,
     ) {
         if self.state.active_connection_id().as_deref() != Some(connection_id) {
-            self.show_error("Connect to this connection before opening a table");
+            self.show_selection_hint("Connect to this connection before opening a table");
             return;
         }
         self.focus_or_open_table_tab(connection_id, database, table);

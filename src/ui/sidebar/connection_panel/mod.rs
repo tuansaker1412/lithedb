@@ -30,6 +30,12 @@ mod render;
 mod tables;
 mod tree_utils;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedItem {
+    pub kind: String,
+    pub connection_id: String,
+}
+
 impl ConnectionPanel {
     pub fn new() -> Self {
         let root = gtk::Box::builder()
@@ -134,6 +140,7 @@ impl ConnectionPanel {
             .model(&tree_store)
             .headers_visible(false)
             .enable_tree_lines(true)
+            .activate_on_single_click(true)
             .tooltip_column(COL_LABEL as i32)
             .build();
         tree_view.selection().set_mode(gtk::SelectionMode::Single);
@@ -162,7 +169,7 @@ impl ConnectionPanel {
         scrolled.set_child(Some(&tree_view));
         root.append(&scrolled);
 
-        Self {
+        let panel = Self {
             root,
             add_button,
             edit_button,
@@ -173,34 +180,73 @@ impl ConnectionPanel {
             tree_view,
             tree_store,
             scrolled,
-        }
+        };
+        panel.update_connection_actions(None);
+        panel
     }
 
     pub fn selected_id(&self) -> Option<String> {
+        self.selected_item().map(|item| item.connection_id)
+    }
+
+    pub fn selected_item(&self) -> Option<SelectedItem> {
         let (_model, iter) = self.tree_view.selection().selected()?;
         let connection_id: String = self.tree_store.get(&iter, COL_CONNECTION_ID as i32);
         if connection_id.is_empty() {
-            None
-        } else {
-            Some(connection_id)
+            return None;
         }
+        let kind: String = self.tree_store.get(&iter, COL_KIND as i32);
+        Some(SelectedItem {
+            kind,
+            connection_id,
+        })
+    }
+
+    pub fn update_connection_actions(&self, active_id: Option<&str>) {
+        let selected = self.selected_item();
+        let has_connection_context = selected.is_some();
+        let selected_connection_id = selected.as_ref().map(|item| item.connection_id.as_str());
+        let is_active_selected = selected_connection_id == active_id;
+
+        self.connect_button
+            .set_sensitive(has_connection_context && !is_active_selected);
+        self.disconnect_button
+            .set_sensitive(has_connection_context && is_active_selected);
+
+        self.connect_button.set_tooltip_text(Some(
+            match (has_connection_context, is_active_selected) {
+                (false, _) => "Select a connection first",
+                (true, true) => "This connection is already active",
+                (true, false) => "Connect to the selected connection",
+            },
+        ));
+        self.disconnect_button.set_tooltip_text(Some(
+            match (has_connection_context, is_active_selected) {
+                (false, _) => "Select an active connection first",
+                (true, true) => "Disconnect the active connection",
+                (true, false) => "Select the active connection to disconnect",
+            },
+        ));
     }
 
     pub fn connect_table_activated<F>(&self, f: F)
     where
         F: Fn(String, String, String) + 'static,
     {
-        self.tree_view.connect_cursor_changed(move |tree_view| {
-            if let Some((model, iter)) = tree_view.selection().selected() {
-                let kind: String = model.get(&iter, COL_KIND as i32);
-                if kind == "table" {
-                    let connection_id: String = model.get(&iter, COL_CONNECTION_ID as i32);
-                    let database: String = model.get(&iter, COL_DATABASE as i32);
-                    let table: String = model.get(&iter, COL_TABLE as i32);
-                    f(connection_id, database, table);
+        self.tree_view
+            .connect_row_activated(move |tree_view, path, _column| {
+                if let Some(model) = tree_view.model() {
+                    if let Some(iter) = model.iter(path) {
+                        let kind: String = model.get(&iter, COL_KIND as i32);
+                        if kind == "table" {
+                            let connection_id: String = model.get(&iter, COL_CONNECTION_ID as i32);
+                            let database: String = model.get(&iter, COL_DATABASE as i32);
+                            let table: String = model.get(&iter, COL_TABLE as i32);
+                            f(connection_id, database, table);
+                        }
+                    }
                 }
-            }
-        });
+            });
     }
 
     pub fn connect_database_expanded<F>(&self, f: F)

@@ -104,6 +104,13 @@ impl MainWindow {
                 .disconnect_button
                 .connect_clicked(move |_| this2.disconnect_active());
         }
+        {
+            let this2 = self.clone_refs();
+            self.panel
+                .tree_view
+                .selection()
+                .connect_changed(move |_| this2.refresh_connection_actions());
+        }
 
         // Sidebar schema events
         {
