@@ -16,7 +16,12 @@ _build_dir="$_repo_root/apps/lithedb-qt/build-arch"
 
 build() {
     cd "$_repo_root"
-    CARGO_PROFILE_RELEASE_LTO=false cargo build -p lithedb-bridge --release --locked
+    LIBSQLITE3_SYS_USE_PKG_CONFIG=1 \
+    SQLITE3_STATIC=0 \
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc \
+    RUSTFLAGS="-C link-arg=-fuse-ld=bfd" \
+    CARGO_PROFILE_RELEASE_LTO=false \
+        cargo build -p lithedb-bridge --release --locked
     cmake -S apps/lithedb-qt -B "$_build_dir" -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build "$_build_dir"
 }
