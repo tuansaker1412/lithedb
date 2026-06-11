@@ -92,11 +92,14 @@ jobs:
           arch: win64_msvc2019_64
           cache: true
 
+      - name: Set up MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build bridge
         run: cargo build -p lithedb-bridge --release --locked
 
       - name: Configure Qt build
-        run: cmake -S apps/lithedb-qt -B build-qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S apps/lithedb-qt -B build-qt -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
 
       - name: Build Qt app
         run: cmake --build build-qt --config Release
