@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tuansaker1412.LitheDB</id>
+  <name>LitheDB</name>
+  <summary>Qt6 desktop database client powered by lithedb-core</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <developer_name>LitheDB Contributors</developer_name>
+  <launchable type="desktop-id">io.github.tuansaker1412.LitheDB.desktop</launchable>
+  <description>
+    <p>LitheDB is a lightweight native database client with a Qt6 frontend and shared Rust core.</p>
+  </description>
+  <url type="homepage">https://github.com/tuansaker1412/lithedb</url>
+</component>

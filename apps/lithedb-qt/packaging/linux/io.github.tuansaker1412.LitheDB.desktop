@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=LitheDB
+Exec=lithedb-qt
+Icon=io.github.tuansaker1412.LitheDB
+Type=Application
+Categories=Development;Database;
+StartupWMClass=io.github.tuansaker1412.LitheDB
+MimeType=text/plain;text/csv;application/sql;
+Terminal=false

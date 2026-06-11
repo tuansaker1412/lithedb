@@ -8,9 +8,12 @@ on:
 permissions:
   contents: read
 
+env:
+  QT_VERSION: "6.7.2"
+
 jobs:
-  build-deb:
-    name: Build Debian Package
+  linux-deb-rpm:
+    name: Build Linux DEB and RPM
     runs-on: ubuntu-latest
 
     steps:
@@ -22,33 +25,46 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            cmake \
+            ninja-build \
             pkg-config \
-            python3 \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libgtksourceview-5-dev \
-            libsecret-1-dev \
-            libsqlite3-dev \
-            libssl-dev
+            qt6-base-dev \
+            qt6-wayland \
+            rpm \
+            dpkg-dev \
+            libgl1-mesa-dev \
+            libxkbcommon-dev \
+            libfontconfig1-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb --locked
+      - name: Build bridge
+        run: cargo build -p lithedb-bridge --release --locked
 
-      - name: Build .deb package
-        run: ./scripts/build-deb.sh
+      - name: Configure Qt build
+        run: cmake -S apps/lithedb-qt -B build-qt -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-      - name: Upload .deb artifact
+      - name: Build Qt app
+        run: cmake --build build-qt --config Release
+
+      - name: Package DEB
+        run: cpack --config build-qt/CPackConfig.cmake -G DEB -B build-qt/packages
+
+      - name: Package RPM
+        run: cpack --config build-qt/CPackConfig.cmake -G RPM -B build-qt/packages
+
+      - name: Upload Linux native artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deb-package
-          path: target/debian/*.deb
+          name: linux-native
+          path: |
+            build-qt/packages/*.deb
+            build-qt/packages/*.rpm
           if-no-files-found: error
 
-  build-rpm:
-    name: Build RPM Package
+  linux-appimage:
+    name: Build AppImage
     runs-on: ubuntu-latest
 
     steps:
@@ -60,33 +76,49 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            cmake \
+            ninja-build \
             pkg-config \
-            python3 \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libgtksourceview-5-dev \
-            libsecret-1-dev \
-            libsqlite3-dev \
-            libssl-dev
+            qt6-base-dev \
+            qt6-wayland \
+            libgl1-mesa-dev \
+            libxkbcommon-dev \
+            libfontconfig1-dev \
+            libfuse2 \
+            patchelf \
+            desktop-file-utils
+
+      - name: Install linuxdeployqt
+        run: |
+          curl -L -o /tmp/linuxdeployqt.AppImage \
+            https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x /tmp/linuxdeployqt.AppImage
+          sudo mv /tmp/linuxdeployqt.AppImage /usr/local/bin/linuxdeployqt
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-generate-rpm
-        run: cargo install cargo-generate-rpm --locked
+      - name: Configure Qt build
+        run: cmake -S apps/lithedb-qt -B build-qt -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build .rpm package
-        run: ./scripts/build-rpm.sh
+      - name: Build Qt app
+        run: cmake --build build-qt --config Release
 
-      - name: Upload .rpm artifact
+      - name: Build AppImage
+        run: |
+          chmod +x apps/lithedb-qt/packaging/linux/build-appimage.sh
+          LINUXDEPLOYQT_BIN=/usr/local/bin/linuxdeployqt \
+            apps/lithedb-qt/packaging/linux/build-appimage.sh build-qt
+
+      - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-package
-          path: target/generate-rpm/*.rpm
+          name: linux-appimage
+          path: build-qt/*.AppImage
           if-no-files-found: error
 
-  build-arch:
-    name: Build Arch Package
+  linux-arch:
+    name: Build Arch package
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
@@ -97,16 +129,13 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm \
             base-devel \
-            rust \
             cargo \
-            gtk4 \
-            libadwaita \
-            gtksourceview5 \
-            libsecret \
-            sqlite \
-            openssl \
-            pkgconf \
-            git
+            cmake \
+            gcc \
+            git \
+            ninja \
+            qt6-base \
+            rust
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,25 +145,109 @@ jobs:
           useradd -m builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
-      - name: Build .pkg.tar.zst package
+      - name: Build Arch package
         run: |
+          chmod +x apps/lithedb-qt/packaging/linux/build-arch.sh
           env -u CC -u CXX -u AR -u CFLAGS -u CXXFLAGS -u LDFLAGS -u RUSTFLAGS \
-            su builder -c "cd '$GITHUB_WORKSPACE' && ./scripts/build-arch.sh"
+            su builder -c "cd '$GITHUB_WORKSPACE' && apps/lithedb-qt/packaging/linux/build-arch.sh"
 
       - name: Upload Arch artifact
         uses: actions/upload-artifact@v4
         with:
-          name: arch-package
-          path: packaging/arch/*.pkg.tar.zst
+          name: linux-arch
+          path: apps/lithedb-qt/packaging/linux/*.pkg.tar.zst
+          if-no-files-found: error
+
+  windows:
+    name: Build Windows packages
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Build bridge
+        run: cargo build -p lithedb-bridge --release --locked
+
+      - name: Configure Qt build
+        run: cmake -S apps/lithedb-qt -B build-qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Qt app
+        run: cmake --build build-qt --config Release
+
+      - name: Package ZIP
+        run: cpack --config build-qt/CPackConfig.cmake -G ZIP -B build-qt/packages
+
+      - name: Package NSIS
+        run: cpack --config build-qt/CPackConfig.cmake -G NSIS -B build-qt/packages
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            build-qt/packages/*.zip
+            build-qt/packages/*.exe
+          if-no-files-found: error
+
+  macos:
+    name: Build macOS DMG
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: clang_64
+          cache: true
+
+      - name: Build bridge
+        run: cargo build -p lithedb-bridge --release --locked
+
+      - name: Configure Qt build
+        run: cmake -S apps/lithedb-qt -B build-qt -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+      - name: Build Qt app
+        run: cmake --build build-qt --config Release
+
+      - name: Build DMG
+        run: |
+          chmod +x apps/lithedb-qt/packaging/macos/build-dmg.sh
+          apps/lithedb-qt/packaging/macos/build-dmg.sh build-qt
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: build-qt/*.dmg
           if-no-files-found: error
 
   publish-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs:
-      - build-deb
-      - build-rpm
-      - build-arch
+      - linux-deb-rpm
+      - linux-appimage
+      - linux-arch
+      - windows
+      - macos
     permissions:
       contents: write
 
@@ -148,7 +261,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd release-assets
-          sha256sum *.deb *.rpm *.pkg.tar.zst > SHA256SUMS
+          sha256sum * > SHA256SUMS
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -156,14 +269,14 @@ jobs:
           files: |
             release-assets/*.deb
             release-assets/*.rpm
+            release-assets/*.AppImage
             release-assets/*.pkg.tar.zst
+            release-assets/*.zip
+            release-assets/*.exe
+            release-assets/*.dmg
             release-assets/SHA256SUMS
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
           generate_release_notes: true
           append_body: true
-
-      - name: Note source archives
-        run: |
-          echo "GitHub automatically provides Source code (zip) and Source code (tar.gz) for this release tag."
