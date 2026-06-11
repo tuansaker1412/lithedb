@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=LitheDB
-Exec=lithedb-qt
+Exec=LitheDB
 Icon=io.github.tuansaker1412.LitheDB
 Type=Application
 Categories=Development;Database;

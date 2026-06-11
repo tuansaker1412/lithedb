@@ -63,7 +63,7 @@ sudo pacman -U ./*.pkg.tar.zst
 ### Windows
 
 - Use the published installer `.exe`, or
-- unpack the portable `.zip` and run `lithedb-qt.exe`
+- unpack the portable `.zip` and run `LitheDB.exe`
 
 ### macOS
 
@@ -97,7 +97,7 @@ rustup toolchain install stable
 cargo build -p lithedb-bridge
 cmake -S apps/lithedb-qt -B apps/lithedb-qt/build -G Ninja
 cmake --build apps/lithedb-qt/build
-LITHEDB_BRIDGE_BIN=$PWD/target/debug/lithedb-bridge ./apps/lithedb-qt/build/lithedb-qt
+LITHEDB_BRIDGE_BIN=$PWD/target/debug/lithedb-bridge ./apps/lithedb-qt/build/LitheDB
 ```
 
 ### Legacy GTK frontend

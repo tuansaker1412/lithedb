@@ -15,9 +15,9 @@ if (Test-Path $stageDir) {
 
 cmake --install $resolvedBuildDir --prefix $stageDir --config Release
 
-$appExe = Join-Path $stageDir "bin\lithedb-qt.exe"
+$appExe = Join-Path $stageDir "bin\LitheDB.exe"
 if (-not (Test-Path $appExe)) {
-    $appExe = Join-Path $stageDir "lithedb-qt.exe"
+    $appExe = Join-Path $stageDir "LitheDB.exe"
 }
 
 if (-not (Test-Path $appExe)) {

@@ -52,10 +52,12 @@ qt_add_executable(lithedb-qt
 target_link_libraries(lithedb-qt PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
 target_compile_definitions(lithedb-qt PRIVATE LITHEDB_QT_VERSION="${PROJECT_VERSION}")
 
+set(LITHEDB_TARGET_OUTPUT_NAME "LitheDB")
+
 set_target_properties(
     lithedb-qt
     PROPERTIES
-        OUTPUT_NAME "lithedb-qt"
+        OUTPUT_NAME "${LITHEDB_TARGET_OUTPUT_NAME}"
         MACOSX_BUNDLE_BUNDLE_NAME "LitheDB"
         MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.tuansaker1412.LitheDB"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
@@ -93,7 +95,7 @@ endif()
 install(FILES
     "${LITHEDB_REPO_ROOT}/README.md"
     "${LITHEDB_REPO_ROOT}/LICENSE"
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/lithedb-qt
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/lithedb
 )
 
 if(WIN32)
@@ -104,9 +106,9 @@ if(WIN32)
     endif()
 
     install(CODE
-        "set(app_path \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/lithedb-qt.exe\")\n"
+        "set(app_path \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/LitheDB.exe\")\n"
         "if(NOT EXISTS \"\${app_path}\")\n"
-        "  set(app_path \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lithedb-qt.exe\")\n"
+        "  set(app_path \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/LitheDB.exe\")\n"
         "endif()\n"
         "execute_process(\n"
         "  COMMAND \"${WINDEPLOYQT_EXECUTABLE}\" --release \"\${app_path}\"\n"
@@ -141,14 +143,14 @@ elseif(APPLE)
     set(CPACK_DMG_VOLUME_NAME "LitheDB")
 else()
     set(CPACK_GENERATOR "DEB;RPM")
-    set(CPACK_DEBIAN_PACKAGE_NAME "lithedb-qt")
+    set(CPACK_DEBIAN_PACKAGE_NAME "lithedb")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "LitheDB Contributors")
     set(CPACK_DEBIAN_PACKAGE_SECTION "database")
     set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Cross-platform desktop database client for PostgreSQL, MySQL, and SQLite, with a Qt frontend, shared Rust core, table editing, and SQL query tools.")
     set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "xdg-desktop-portal")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-    set(CPACK_RPM_PACKAGE_NAME "lithedb-qt")
+    set(CPACK_RPM_PACKAGE_NAME "lithedb")
     set(CPACK_RPM_PACKAGE_LICENSE "MIT")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Databases")
     set(CPACK_RPM_PACKAGE_SUMMARY "Cross-platform Qt database client with table editing and SQL query tools")
