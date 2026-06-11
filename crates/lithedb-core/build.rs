@@ -1,4 +1,8 @@
+use std::env;
+
 fn main() {
-    // libsqlite3-sys already emits the correct link directives for bundled or system SQLite.
-    // Avoid overriding that here, which can force an incompatible system libsqlite3 at link time.
+    if let Ok(lib_dir) = env::var("DEP_SQLITE3_LIB_DIR") {
+        println!("cargo:rustc-link-search=native={lib_dir}");
+        println!("cargo:rustc-link-lib=static=sqlite3");
+    }
 }
