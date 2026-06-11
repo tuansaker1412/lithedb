@@ -6,8 +6,8 @@ pkgdesc="Cross-platform Qt database client with table editing and SQL query tool
 arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')
-depends=('qt6-base' 'hicolor-icon-theme')
-makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'openssl' 'rust')
+depends=('qt6-base' 'hicolor-icon-theme' 'sqlite')
+makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'openssl' 'rust' 'sqlite' 'pkg-config')
 source=()
 sha256sums=()
 

@@ -92,6 +92,15 @@ jobs:
             desktop-file-utils \
             librsvg2-bin
 
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.0'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          install-deps: 'true'
+
       - name: Install linuxdeployqt
         run: |
           curl -L -o /tmp/linuxdeployqt.AppImage \
