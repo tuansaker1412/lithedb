@@ -634,11 +634,11 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
             {"save-connection", payloadJson},
             "Saving connection...",
             [&, savedPayload](const QByteArray&) {
-                result = ConnectionDialogResult {
-                    .payload = savedPayload,
-                    .displayName = savedPayload.value("name").toString(),
-                    .driverName = savedPayload.value("driver").toString(),
-                };
+                ConnectionDialogResult savedResult;
+                savedResult.payload = savedPayload;
+                savedResult.displayName = savedPayload.value("name").toString();
+                savedResult.driverName = savedPayload.value("driver").toString();
+                result = savedResult;
                 dialog.accept();
             }
         );
