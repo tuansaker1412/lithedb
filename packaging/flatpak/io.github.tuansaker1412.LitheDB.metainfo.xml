@@ -9,8 +9,8 @@
   <url type="bugtracker">https://github.com/tuansaker1412/lithedb/issues</url>
   <developer_name>LitheDB Contributors</developer_name>
   <description>
-    <p>This package contains the legacy GTK frontend for LitheDB on Linux.</p>
-    <p>It supports PostgreSQL, MySQL, and SQLite with secure local credential storage.</p>
+    <p>Legacy Linux GTK frontend retained for compatibility and reference.</p>
+    <p>The production release line uses the Qt desktop frontend.</p>
   </description>
   <launchable type="desktop-id">io.github.tuansaker1412.LitheDB.desktop</launchable>
   <categories>

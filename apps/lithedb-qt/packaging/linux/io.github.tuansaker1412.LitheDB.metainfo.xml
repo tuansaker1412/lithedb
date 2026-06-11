@@ -2,13 +2,13 @@
 <component type="desktop-application">
   <id>io.github.tuansaker1412.LitheDB</id>
   <name>LitheDB</name>
-  <summary>Official Qt6 desktop database client powered by lithedb-core</summary>
+  <summary>Cross-platform Qt database client with table editing and SQL query tools</summary>
   <metadata_license>MIT</metadata_license>
   <project_license>MIT</project_license>
   <developer_name>LitheDB Contributors</developer_name>
   <launchable type="desktop-id">io.github.tuansaker1412.LitheDB.desktop</launchable>
   <description>
-    <p>LitheDB is a cross-platform database client with the official Qt6 frontend and shared Rust core.</p>
+    <p>LitheDB is a cross-platform desktop database client for PostgreSQL, MySQL, and SQLite, with a Qt frontend, shared Rust core, table editing, and SQL query tools.</p>
   </description>
   <url type="homepage">https://github.com/tuansaker1412/lithedb</url>
 </component>

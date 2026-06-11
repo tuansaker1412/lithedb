@@ -5,7 +5,7 @@ members = ["crates/lithedb-core", "crates/lithedb-bridge"]
 name = "lithedb"
 version = "1.0.0"
 edition = "2021"
-description = "LitheDB legacy GTK frontend and shared workspace for the Qt-based cross-platform desktop client"
+description = "Legacy GTK frontend and workspace metadata for LitheDB"
 license = "MIT"
 homepage = "https://github.com/tuansaker1412/lithedb"
 repository = "https://github.com/tuansaker1412/lithedb"
@@ -46,13 +46,8 @@ maintainer = "LitheDB Contributors <contact@lithedb.dev>"
 copyright = "2026, LitheDB Contributors"
 license-file = ["LICENSE", "4"]
 extended-description = """\
-Legacy GTK frontend for the LitheDB workspace.
-The production desktop release is the Qt6 frontend packaged separately, while this crate remains available for compatibility and internal reference.
-Supports PostgreSQL, MySQL, and SQLite with features including:
-- SQL editor with syntax highlighting
-- Result grid with pagination and CSV export
-- Secure connection management with keyring integration
-- Native GTK4/libadwaita interface"""
+Legacy Linux GTK frontend retained for compatibility and reference.
+The production release line uses the Qt desktop frontend."""
 depends = "$auto, libgtk-4-1, libadwaita-1-0, libgtksourceview-5-0, libsqlite3-0"
 section = "database"
 priority = "optional"

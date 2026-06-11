@@ -2,7 +2,7 @@
 pkgname=lithedb-qt
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Qt6 desktop database client powered by a shared Rust core"
+pkgdesc="Cross-platform Qt database client with table editing and SQL query tools"
 arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')

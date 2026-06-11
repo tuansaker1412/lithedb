@@ -2,7 +2,7 @@
 pkgname=lithedb
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Legacy GTK frontend for the LitheDB workspace"
+pkgdesc="Legacy GTK frontend for LitheDB on Linux"
 arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')
