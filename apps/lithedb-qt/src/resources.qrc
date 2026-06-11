@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>theme.qss</file>
+        <file alias="icons/lithedb.svg">../../../packaging/flatpak/io.github.tuansaker1412.LitheDB.svg</file>
     </qresource>
 </RCC>

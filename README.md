@@ -1,5 +1,9 @@
 # LitheDB
 
+<p align="center">
+  <img src="packaging/flatpak/io.github.tuansaker1412.LitheDB.svg" alt="LitheDB icon" width="128" height="128">
+</p>
+
 LitheDB is a cross-platform desktop database client built with a shared Rust core and a production Qt6 Widgets frontend.
 
 `v1.0.0` is the first official multi-platform production release. The Qt app under `apps/lithedb-qt/` is now the maintained desktop frontend for Linux, macOS, and Windows. The older GTK frontend under `src/` remains in the repository as a legacy reference and fallback code path, but it is no longer the release target and will not receive feature work.

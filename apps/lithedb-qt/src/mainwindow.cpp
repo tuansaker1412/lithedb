@@ -3806,17 +3806,102 @@ void MainWindow::show_about_dialog()
     const auto version = QCoreApplication::applicationVersion().isEmpty()
         ? "unknown"
         : QCoreApplication::applicationVersion();
-    QMessageBox about(this);
-    about.setWindowTitle("About LitheDB");
-    about.setIcon(QMessageBox::Information);
-    about.setText("LitheDB");
-    about.setInformativeText(
-        QString(
-            "Qt6 desktop frontend for LitheDB.\n\nVersion: %1\nWebsite: https://github.com/tuansaker1412/lithedb\nIssues: https://github.com/tuansaker1412/lithedb/issues"
-        )
-            .arg(version)
+    const auto appIcon = QIcon(":/icons/lithedb.svg");
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("About LitheDB");
+    dialog.setWindowIcon(appIcon);
+    dialog.setModal(true);
+    dialog.resize(520, 0);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setSpacing(14);
+
+    auto* heroCard = new QWidget(&dialog);
+    heroCard->setObjectName("dialogCard");
+    auto* heroLayout = new QVBoxLayout(heroCard);
+    heroLayout->setContentsMargins(24, 24, 24, 24);
+    heroLayout->setSpacing(10);
+
+    auto* logoShell = new QLabel(&dialog);
+    logoShell->setObjectName("aboutLogoShell");
+    logoShell->setFixedSize(104, 104);
+    logoShell->setPixmap(appIcon.pixmap(72, 72));
+    logoShell->setAlignment(Qt::AlignCenter);
+    heroLayout->addWidget(logoShell, 0, Qt::AlignHCenter);
+
+    auto* titleLabel = new QLabel("LitheDB", &dialog);
+    titleLabel->setObjectName("aboutAppTitle");
+    titleLabel->setAlignment(Qt::AlignHCenter);
+    heroLayout->addWidget(titleLabel);
+
+    auto* subtitleLabel = new QLabel("Cross-platform desktop database client built with Qt and Rust.", &dialog);
+    subtitleLabel->setObjectName("aboutSubtitle");
+    subtitleLabel->setAlignment(Qt::AlignHCenter);
+    subtitleLabel->setWordWrap(true);
+    heroLayout->addWidget(subtitleLabel);
+
+    auto* versionBadge = new QLabel(QString("Version %1").arg(version), &dialog);
+    versionBadge->setObjectName("aboutVersionBadge");
+    versionBadge->setAlignment(Qt::AlignCenter);
+    heroLayout->addWidget(versionBadge, 0, Qt::AlignHCenter);
+
+    layout->addWidget(heroCard);
+
+    QVBoxLayout* cardLayout = nullptr;
+    auto* card = create_dialog_card(&dialog, cardLayout);
+    cardLayout->setSpacing(12);
+
+    auto addInfoRow = [&](const QString& title, QWidget* valueWidget) {
+        auto* row = new QWidget(card);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(14);
+
+        auto* keyLabel = new QLabel(title, row);
+        keyLabel->setObjectName("aboutMetaLabel");
+        keyLabel->setFixedWidth(72);
+        rowLayout->addWidget(keyLabel, 0, Qt::AlignTop);
+        rowLayout->addWidget(valueWidget, 1);
+
+        cardLayout->addWidget(row);
+    };
+
+    auto* authorValue = new QLabel("Ngoc Tuan", card);
+    authorValue->setObjectName("aboutMetaValue");
+    authorValue->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    addInfoRow("Author", authorValue);
+
+    auto* websiteValue = new QLabel(
+        "<a href=\"https://github.com/tuansaker1412/lithedb\">github.com/tuansaker1412/lithedb</a>",
+        card
     );
-    about.exec();
+    websiteValue->setObjectName("aboutLink");
+    websiteValue->setTextFormat(Qt::RichText);
+    websiteValue->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    websiteValue->setOpenExternalLinks(true);
+    websiteValue->setWordWrap(true);
+    addInfoRow("Website", websiteValue);
+
+    auto* issuesValue = new QLabel(
+        "<a href=\"https://github.com/tuansaker1412/lithedb/issues\">github.com/tuansaker1412/lithedb/issues</a>",
+        card
+    );
+    issuesValue->setObjectName("aboutLink");
+    issuesValue->setTextFormat(Qt::RichText);
+    issuesValue->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    issuesValue->setOpenExternalLinks(true);
+    issuesValue->setWordWrap(true);
+    addInfoRow("Issues", issuesValue);
+
+    layout->addWidget(card);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    dialog.exec();
 }
 
 void MainWindow::show_shortcuts_dialog()

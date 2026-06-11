@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QFile>
+#include <QIcon>
 #include <QPalette>
 #include <QStyleHints>
 #include <QStyleFactory>
@@ -56,6 +57,7 @@ int main(int argc, char* argv[])
     app.setApplicationVersion(QStringLiteral(LITHEDB_QT_VERSION));
     app.setOrganizationName("tuansaker1412");
     app.setDesktopFileName("io.github.tuansaker1412.LitheDB");
+    app.setWindowIcon(QIcon(":/icons/lithedb.svg"));
     app.styleHints()->setShowShortcutsInContextMenus(true);
     app.setProperty("lithedbThemeMode", "system");
     app.setProperty("lithedbSystemPrefersDark", systemPrefersDark);

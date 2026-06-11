@@ -388,6 +388,55 @@ QLabel#windowTitle {
     color: #111827;
 }
 
+QLabel#aboutLogoShell {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #eef6ff, stop:1 #dcecff);
+    border: 1px solid #c8def7;
+    border-radius: 26px;
+    padding: 16px;
+}
+
+QLabel#aboutAppTitle {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+QLabel#aboutSubtitle {
+    color: #5b6573;
+    font-size: 13px;
+    max-width: 360px;
+}
+
+QLabel#aboutVersionBadge {
+    background: #e9f3ff;
+    color: #0f4c81;
+    border: 1px solid #cfe3fb;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#aboutMetaLabel {
+    color: #66758a;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#aboutMetaValue {
+    color: #111827;
+    font-size: 13px;
+}
+
+QLabel#aboutLink {
+    color: #0f6cbd;
+    font-size: 13px;
+}
+
+QLabel#aboutLink:hover {
+    color: #135ea7;
+}
+
 QLabel#dimCaption,
 QLabel#fieldCaption {
     color: #5f6b7a;
