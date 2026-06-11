@@ -1,3 +1,6 @@
+[workspace]
+members = ["crates/lithedb-core", "crates/lithedb-bridge"]
+
 [package]
 name = "lithedb"
 version = "0.1.2"
@@ -8,6 +11,7 @@ homepage = "https://github.com/tuansaker1412/lithedb"
 repository = "https://github.com/tuansaker1412/lithedb"
 
 [dependencies]
+lithedb-core = { path = "crates/lithedb-core" }
 gtk4 = "0.7"
 libadwaita = { version = "0.5", features = ["v1_2"] }
 sourceview5 = "0.7"

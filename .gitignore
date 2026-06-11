@@ -50,6 +50,11 @@ connections.json
 *.sqlite
 *.sqlite3
 
+# Qt builds
+apps/lithedb-qt/build/
+apps/lithedb-qt/.qtc_clangd/
+
+
 # Debian package artifacts
 target/debian/
 *.deb

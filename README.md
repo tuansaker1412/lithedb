@@ -1,6 +1,6 @@
 # LitheDB
 
-Lightweight native database client for Linux built with Rust, GTK4, and libadwaita.
+Lightweight database client built in Rust. The current production UI targets Linux with GTK4/libadwaita, and the repository now includes an experimental Qt6 Widgets frontend scaffold for Windows and macOS.
 
 LitheDB focuses on a fast desktop workflow for PostgreSQL, MySQL, and SQLite with native Linux packaging and secure credential storage.
 
@@ -8,6 +8,7 @@ LitheDB focuses on a fast desktop workflow for PostgreSQL, MySQL, and SQLite wit
 
 - PostgreSQL, MySQL, and SQLite support
 - Native GTK4/libadwaita interface
+- Experimental Qt6 Widgets frontend scaffold for cross-platform work
 - Connection manager with connect, disconnect, edit, and delete flows
 - Secure credential storage via system keyring with encrypted fallback
 - Schema browser with async loading
@@ -115,10 +116,27 @@ sudo pacman -Syu --needed \
 rustup default stable
 ```
 
-### Run Locally
+### Run GTK Frontend Locally
 
 ```bash
 cargo run
+```
+
+### Build Experimental Qt6 Widgets Frontend
+
+The Qt frontend lives in `apps/lithedb-qt` and mirrors the current GTK layout with:
+
+- top toolbar
+- left connection/schema sidebar
+- top query tabs
+- bottom data tabs
+- status bar
+
+Build it with CMake and Qt6 Widgets:
+
+```bash
+cmake -S apps/lithedb-qt -B apps/lithedb-qt/build
+cmake --build apps/lithedb-qt/build
 ```
 
 ### Build Release Binary
