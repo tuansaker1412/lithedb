@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 QT_APP_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-REPO_ROOT=$(cd "$QT_APP_DIR/../../.." && pwd)
+REPO_ROOT=$(cd "$QT_APP_DIR/../.." && pwd)
 BUILD_DIR=${1:-"$QT_APP_DIR/build"}
 APPDIR=${APPDIR:-"$BUILD_DIR/AppDir"}
 VERSION=${LITHEDB_VERSION:-$(sed -n 's/^project(LitheDBQt VERSION \\([^ ]*\\) LANGUAGES CXX)$/\\1/p' "$QT_APP_DIR/CMakeLists.txt")}

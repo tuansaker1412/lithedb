@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 QT_APP_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-REPO_ROOT=$(cd "$QT_APP_DIR/../../.." && pwd)
+REPO_ROOT=$(cd "$QT_APP_DIR/../.." && pwd)
 BUILD_DIR=${1:-"$QT_APP_DIR/build"}
 STAGE_DIR="$BUILD_DIR/stage"
 APP_BUNDLE="$STAGE_DIR/LitheDB.app"
