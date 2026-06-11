@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')
 depends=('qt6-base' 'hicolor-icon-theme' 'sqlite')
-makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'openssl' 'rust' 'sqlite' 'pkg-config')
+makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'openssl' 'rust' 'sqlite' 'pkgconf')
 source=()
 sha256sums=()
 
@@ -16,7 +16,7 @@ _build_dir="$_repo_root/apps/lithedb-qt/build-arch"
 
 build() {
     cd "$_repo_root"
-    cargo build -p lithedb-bridge --release --locked
+    CARGO_PROFILE_RELEASE_LTO=false cargo build -p lithedb-bridge --release --locked
     cmake -S apps/lithedb-qt -B "$_build_dir" -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build "$_build_dir"
 }

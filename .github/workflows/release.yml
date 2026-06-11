@@ -148,6 +148,7 @@ jobs:
             git \
             ninja \
             openssl \
+            pkgconf \
             qt6-base \
             sqlite \
             rust
