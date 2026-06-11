@@ -6,6 +6,10 @@
 #include <QStyleHints>
 #include <QStyleFactory>
 
+#ifndef LITHEDB_QT_VERSION
+#define LITHEDB_QT_VERSION "0.0.0"
+#endif
+
 static void apply_light_palette(QApplication& app)
 {
     app.setStyle(QStyleFactory::create("Fusion"));
@@ -39,16 +43,22 @@ static void load_stylesheet(QApplication& app)
         return;
     }
 
-    app.setStyleSheet(QString::fromUtf8(file.readAll()));
+    const auto stylesheet = QString::fromUtf8(file.readAll());
+    app.setProperty("lithedbLightStyleSheet", stylesheet);
+    app.setStyleSheet(stylesheet);
 }
 
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
+    const bool systemPrefersDark = app.palette().color(QPalette::Window).lightness() < 128;
     app.setApplicationName("LitheDB");
+    app.setApplicationVersion(QStringLiteral(LITHEDB_QT_VERSION));
     app.setOrganizationName("tuansaker1412");
     app.setDesktopFileName("io.github.tuansaker1412.LitheDB");
     app.styleHints()->setShowShortcutsInContextMenus(true);
+    app.setProperty("lithedbThemeMode", "system");
+    app.setProperty("lithedbSystemPrefersDark", systemPrefersDark);
 
     apply_light_palette(app);
     load_stylesheet(app);

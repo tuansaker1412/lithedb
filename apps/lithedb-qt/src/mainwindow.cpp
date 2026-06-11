@@ -16,6 +16,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -24,6 +25,7 @@
 #include <QProgressBar>
 #include <QFileDialog>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -60,6 +62,8 @@
 #include <QTabBar>
 #include <QTimer>
 #include <QStyle>
+#include <QStyleFactory>
+#include <QStyleHints>
 #include <QScrollArea>
 #include <QShortcut>
 #include <QSignalBlocker>
@@ -94,6 +98,191 @@ struct ConnectionDialogResult {
 
 QString normalize_driver_name(const QString& driver);
 QWidget* create_dialog_card(QWidget* parent, QVBoxLayout*& cardLayout);
+
+enum class ThemeMode {
+    FollowSystem,
+    ForceLight,
+    ForceDark,
+};
+
+QString theme_mode_key(ThemeMode mode)
+{
+    switch (mode) {
+    case ThemeMode::ForceLight:
+        return "light";
+    case ThemeMode::ForceDark:
+        return "dark";
+    case ThemeMode::FollowSystem:
+    default:
+        return "system";
+    }
+}
+
+ThemeMode theme_mode_from_key(const QString& mode)
+{
+    if (mode == "light") {
+        return ThemeMode::ForceLight;
+    }
+    if (mode == "dark") {
+        return ThemeMode::ForceDark;
+    }
+    return ThemeMode::FollowSystem;
+}
+
+QPalette build_palette(bool dark)
+{
+    QPalette palette;
+    if (dark) {
+        palette.setColor(QPalette::Window, QColor("#111827"));
+        palette.setColor(QPalette::WindowText, QColor("#e5e7eb"));
+        palette.setColor(QPalette::Base, QColor("#0f172a"));
+        palette.setColor(QPalette::AlternateBase, QColor("#16202d"));
+        palette.setColor(QPalette::ToolTipBase, QColor("#0f172a"));
+        palette.setColor(QPalette::ToolTipText, QColor("#e5e7eb"));
+        palette.setColor(QPalette::Text, QColor("#e5e7eb"));
+        palette.setColor(QPalette::Button, QColor("#0f172a"));
+        palette.setColor(QPalette::ButtonText, QColor("#e5e7eb"));
+        palette.setColor(QPalette::BrightText, QColor("#ffffff"));
+        palette.setColor(QPalette::PlaceholderText, QColor("#94a3b8"));
+        palette.setColor(QPalette::Highlight, QColor("#1d4ed8"));
+        palette.setColor(QPalette::HighlightedText, QColor("#eff6ff"));
+        palette.setColor(QPalette::Light, QColor("#1e293b"));
+        palette.setColor(QPalette::Midlight, QColor("#334155"));
+        palette.setColor(QPalette::Mid, QColor("#475569"));
+        palette.setColor(QPalette::Dark, QColor("#0b1220"));
+        palette.setColor(QPalette::Shadow, QColor("#020617"));
+        return palette;
+    }
+
+    palette.setColor(QPalette::Window, QColor("#f4f6f8"));
+    palette.setColor(QPalette::WindowText, QColor("#1f2328"));
+    palette.setColor(QPalette::Base, QColor("#ffffff"));
+    palette.setColor(QPalette::AlternateBase, QColor("#f7f9fb"));
+    palette.setColor(QPalette::ToolTipBase, QColor("#ffffff"));
+    palette.setColor(QPalette::ToolTipText, QColor("#1f2328"));
+    palette.setColor(QPalette::Text, QColor("#1f2328"));
+    palette.setColor(QPalette::Button, QColor("#ffffff"));
+    palette.setColor(QPalette::ButtonText, QColor("#1f2328"));
+    palette.setColor(QPalette::BrightText, QColor("#ffffff"));
+    palette.setColor(QPalette::PlaceholderText, QColor("#7a828c"));
+    palette.setColor(QPalette::Highlight, QColor("#cfe5ff"));
+    palette.setColor(QPalette::HighlightedText, QColor("#10233f"));
+    palette.setColor(QPalette::Light, QColor("#ffffff"));
+    palette.setColor(QPalette::Midlight, QColor("#e5e9ee"));
+    palette.setColor(QPalette::Mid, QColor("#c9d2dc"));
+    palette.setColor(QPalette::Dark, QColor("#aeb8c2"));
+    palette.setColor(QPalette::Shadow, QColor("#7f8b96"));
+    return palette;
+}
+
+QString themed_stylesheet(bool dark)
+{
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    if (!app) {
+        return QString();
+    }
+
+    const auto baseStyle = app->property("lithedbLightStyleSheet").toString();
+    if (!dark || baseStyle.isEmpty()) {
+        return baseStyle;
+    }
+
+    QString style = baseStyle;
+    const std::vector<std::pair<QString, QString>> replacements = {
+        {"#f4f6f8", "__LITHEDB_DARK_WINDOW__"},
+        {"#fbfcfd", "__LITHEDB_DARK_SIDEBAR__"},
+        {"#fafbfd", "__LITHEDB_DARK_PANEL__"},
+        {"#f8fafc", "__LITHEDB_DARK_PANEL__"},
+        {"#f7f9fb", "__LITHEDB_DARK_ALT__"},
+        {"#f3f6f9", "__LITHEDB_DARK_HOVER__"},
+        {"#eef2f6", "__LITHEDB_DARK_DISABLED__"},
+        {"#edf3fa", "__LITHEDB_DARK_HOVER__"},
+        {"#edf1f5", "__LITHEDB_DARK_GRID__"},
+        {"#eef4fb", "__LITHEDB_DARK_SECTION_HOVER__"},
+        {"#e9eff6", "__LITHEDB_DARK_SOFT_HOVER__"},
+        {"#e8f1fd", "__LITHEDB_DARK_MENU_HOVER__"},
+        {"#e5e9ee", "__LITHEDB_DARK_BORDER__"},
+        {"#dfe5eb", "__LITHEDB_DARK_BORDER__"},
+        {"#dbe2ea", "__LITHEDB_DARK_BORDER__"},
+        {"#d6dde5", "__LITHEDB_DARK_BORDER__"},
+        {"#cfd7df", "__LITHEDB_DARK_FIELD_BORDER__"},
+        {"#c9d3de", "__LITHEDB_DARK_FIELD_BORDER__"},
+        {"#c9d2dc", "__LITHEDB_DARK_FIELD_BORDER__"},
+        {"#cfe5ff", "__LITHEDB_DARK_SELECTION__"},
+        {"#84b6f4", "__LITHEDB_DARK_ACCENT_SOFT__"},
+        {"#7aa7d9", "__LITHEDB_DARK_ACCENT_SOFT__"},
+        {"#98a4b3", "__LITHEDB_DARK_MUTED__"},
+        {"#7a828c", "__LITHEDB_DARK_MUTED__"},
+        {"#475569", "__LITHEDB_DARK_SUBTLE_TEXT__"},
+        {"#374151", "__LITHEDB_DARK_SUBTLE_TEXT__"},
+        {"#1f2937", "__LITHEDB_DARK_TEXT__"},
+        {"#1f2328", "__LITHEDB_DARK_TEXT__"},
+        {"#111827", "__LITHEDB_DARK_BRIGHT_TEXT__"},
+        {"#10233f", "__LITHEDB_DARK_SELECTION_TEXT__"},
+        {"#0f172a", "__LITHEDB_DARK_BRIGHT_TEXT__"},
+        {"#0f6cbd", "__LITHEDB_DARK_ACCENT__"},
+        {"#135ea7", "__LITHEDB_DARK_ACCENT_ACTIVE__"},
+        {"#ffffff", "__LITHEDB_DARK_SURFACE__"},
+    };
+
+    for (const auto& [from, token] : replacements) {
+        style.replace(from, token, Qt::CaseSensitive);
+    }
+
+    const std::vector<std::pair<QString, QString>> tokens = {
+        {"__LITHEDB_DARK_WINDOW__", "#111827"},
+        {"__LITHEDB_DARK_SIDEBAR__", "#0b1220"},
+        {"__LITHEDB_DARK_PANEL__", "#0f172a"},
+        {"__LITHEDB_DARK_ALT__", "#16202d"},
+        {"__LITHEDB_DARK_HOVER__", "#1e293b"},
+        {"__LITHEDB_DARK_DISABLED__", "#1f2937"},
+        {"__LITHEDB_DARK_GRID__", "#203047"},
+        {"__LITHEDB_DARK_SECTION_HOVER__", "#203047"},
+        {"__LITHEDB_DARK_SOFT_HOVER__", "#223048"},
+        {"__LITHEDB_DARK_MENU_HOVER__", "#1d3652"},
+        {"__LITHEDB_DARK_BORDER__", "#334155"},
+        {"__LITHEDB_DARK_FIELD_BORDER__", "#475569"},
+        {"__LITHEDB_DARK_SELECTION__", "#1d4ed8"},
+        {"__LITHEDB_DARK_ACCENT_SOFT__", "#60a5fa"},
+        {"__LITHEDB_DARK_MUTED__", "#94a3b8"},
+        {"__LITHEDB_DARK_SUBTLE_TEXT__", "#cbd5e1"},
+        {"__LITHEDB_DARK_TEXT__", "#e5e7eb"},
+        {"__LITHEDB_DARK_BRIGHT_TEXT__", "#f8fafc"},
+        {"__LITHEDB_DARK_SELECTION_TEXT__", "#eff6ff"},
+        {"__LITHEDB_DARK_ACCENT__", "#2563eb"},
+        {"__LITHEDB_DARK_ACCENT_ACTIVE__", "#1d4ed8"},
+        {"__LITHEDB_DARK_SURFACE__", "#0f172a"},
+    };
+    for (const auto& [token, to] : tokens) {
+        style.replace(token, to, Qt::CaseSensitive);
+    }
+    return style;
+}
+
+ThemeMode current_theme_mode()
+{
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    if (!app) {
+        return ThemeMode::ForceLight;
+    }
+    return theme_mode_from_key(app->property("lithedbThemeMode").toString());
+}
+
+void apply_theme_mode(ThemeMode mode)
+{
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    if (!app) {
+        return;
+    }
+
+    const bool useDark = mode == ThemeMode::ForceDark
+        || (mode == ThemeMode::FollowSystem
+            && app->property("lithedbSystemPrefersDark").toBool());
+    app->setStyle(QStyleFactory::create("Fusion"));
+    app->setPalette(build_palette(useDark));
+    app->setStyleSheet(themed_stylesheet(useDark));
+    app->setProperty("lithedbThemeMode", theme_mode_key(mode));
+}
 
 QString driver_display_name(const QString& driver)
 {
@@ -1047,6 +1236,7 @@ QWidget* make_sidebar_header(const QString& title)
         QStyle::SP_BrowserReload,
         "Refresh Schema (Ctrl+R)"
     );
+    refresh->setProperty("sidebarRefreshSchemaButton", true);
 
     layout->addWidget(label);
     layout->addStretch(1);
@@ -1224,6 +1414,16 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle("LitheDB");
     resize(1200, 800);
     setMinimumSize(720, 480);
+    setStyleSheet(
+        "#tableSortSection {"
+        "  border: 1px solid palette(mid);"
+        "  border-radius: 10px;"
+        "  background: palette(alternate-base);"
+        "}"
+        "#tableSortColumnInput {"
+        "  padding: 6px 8px;"
+        "}"
+    );
 
     build_toolbar();
     build_central_layout();
@@ -1546,30 +1746,73 @@ void MainWindow::build_toolbar()
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     toolbar_->addWidget(spacer);
 
-    auto* newQuery = toolbar_->addAction(
-        themed_icon("tab-new-symbolic", QStyle::SP_FileIcon),
-        "New Query"
-    );
-    newQuery->setToolTip("New Query Tab (Ctrl+T)");
-    auto* menu = toolbar_->addAction(
-        themed_icon("open-menu-symbolic", QStyle::SP_TitleBarMenuButton),
-        "Menu"
-    );
-    menu->setToolTip("Main Menu");
+    auto* newQueryAction = new QAction(themed_icon("tab-new-symbolic", QStyle::SP_FileIcon), "New Query Tab", this);
+    newQueryAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
+    newQueryAction->setShortcutContext(Qt::WindowShortcut);
+    newQueryAction->setToolTip("New Query Tab (Ctrl+T)");
+    addAction(newQueryAction);
+
+    auto* closeQueryAction = new QAction("Close Query Tab", this);
+    closeQueryAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    closeQueryAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(closeQueryAction);
+
+    auto* newConnectionAction = new QAction("New Connection", this);
+    newConnectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+    newConnectionAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(newConnectionAction);
+
+    auto* manageConnectionsAction = new QAction("Manage Connections", this);
+    addAction(manageConnectionsAction);
+
+    auto* refreshSchemaAction = new QAction("Refresh Schema", this);
+    refreshSchemaAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    refreshSchemaAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(refreshSchemaAction);
+
+    auto* reloadTableAction = new QAction("Reload Active Table", this);
+    reloadTableAction->setShortcut(QKeySequence(Qt::Key_F5));
+    reloadTableAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(reloadTableAction);
+
+    auto* preferencesAction = new QAction("Preferences", this);
+    addAction(preferencesAction);
+
+    auto* shortcutsAction = new QAction("Keyboard Shortcuts", this);
+    shortcutsAction->setShortcut(QKeySequence(Qt::Key_F1));
+    shortcutsAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(shortcutsAction);
+
+    auto* aboutAction = new QAction("About", this);
+    addAction(aboutAction);
+
+    auto* quitAction = new QAction("Quit", this);
+    quitAction->setShortcut(QKeySequence::Quit);
+    addAction(quitAction);
+
+    auto* newQueryButton = new QToolButton(this);
+    newQueryButton->setDefaultAction(newQueryAction);
+    newQueryButton->setAutoRaise(true);
+    toolbar_->addWidget(newQueryButton);
 
     auto* fileMenu = menuBar()->addMenu("&File");
-    auto* newConnectionAction = fileMenu->addAction("New Connection");
-    auto* manageConnectionsAction = fileMenu->addAction("Manage Connections");
+    fileMenu->addAction(newConnectionAction);
+    fileMenu->addAction(manageConnectionsAction);
     fileMenu->addSeparator();
-    fileMenu->addAction("Quit");
+    fileMenu->addAction(newQueryAction);
+    fileMenu->addAction(closeQueryAction);
+    fileMenu->addSeparator();
+    fileMenu->addAction(quitAction);
 
     auto* viewMenu = menuBar()->addMenu("&View");
-    viewMenu->addAction("Refresh Schema");
-    viewMenu->addAction("Preferences");
+    viewMenu->addAction(refreshSchemaAction);
+    viewMenu->addAction(reloadTableAction);
+    viewMenu->addSeparator();
+    viewMenu->addAction(preferencesAction);
 
     auto* helpMenu = menuBar()->addMenu("&Help");
-    helpMenu->addAction("Keyboard Shortcuts");
-    helpMenu->addAction("About");
+    helpMenu->addAction(shortcutsAction);
+    helpMenu->addAction(aboutAction);
 
     connect(newConnectionAction, &QAction::triggered, this, [this]() { open_connection_dialog(); });
     connect(manageConnectionsAction, &QAction::triggered, this, [this]() {
@@ -1586,16 +1829,32 @@ void MainWindow::build_toolbar()
         }
         open_connection_dialog();
     });
+    connect(refreshSchemaAction, &QAction::triggered, this, [this]() { refresh_schema(); });
+    connect(reloadTableAction, &QAction::triggered, this, [this]() { reload_current_table(); });
+    connect(preferencesAction, &QAction::triggered, this, [this]() { show_preferences_dialog(); });
+    connect(shortcutsAction, &QAction::triggered, this, [this]() { show_shortcuts_dialog(); });
+    connect(aboutAction, &QAction::triggered, this, [this]() { show_about_dialog(); });
+    connect(quitAction, &QAction::triggered, this, [this]() { close(); });
+    connect(newQueryAction, &QAction::triggered, this, [this]() { create_query_tab(); });
+    connect(closeQueryAction, &QAction::triggered, this, [this]() { close_active_query_tab(); });
 
-    connect(newQuery, &QAction::triggered, this, [this]() { create_query_tab(); });
+    auto* headerMenu = new QMenu(this);
+    headerMenu->addAction(newConnectionAction);
+    headerMenu->addAction(manageConnectionsAction);
+    headerMenu->addSeparator();
+    headerMenu->addAction(refreshSchemaAction);
+    headerMenu->addAction(preferencesAction);
+    headerMenu->addSeparator();
+    headerMenu->addAction(shortcutsAction);
+    headerMenu->addAction(aboutAction);
 
-    auto* newQueryShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), this);
-    connect(newQueryShortcut, &QShortcut::activated, this, [this]() { create_query_tab(); });
-
-    auto* closeQueryShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), this);
-    connect(closeQueryShortcut, &QShortcut::activated, this, [this]() { close_active_query_tab(); });
-
-    Q_UNUSED(menu);
+    auto* menuButton = new QToolButton(this);
+    menuButton->setIcon(themed_icon("open-menu-symbolic", QStyle::SP_TitleBarMenuButton));
+    menuButton->setToolTip("Main Menu");
+    menuButton->setAutoRaise(true);
+    menuButton->setPopupMode(QToolButton::InstantPopup);
+    menuButton->setMenu(headerMenu);
+    toolbar_->addWidget(menuButton);
 }
 
 void MainWindow::build_central_layout()
@@ -1721,6 +1980,9 @@ void MainWindow::seed_sidebar()
     });
 
     for (auto* button : findChildren<QToolButton*>()) {
+        if (button->property("sidebarRefreshSchemaButton").toBool()) {
+            connect(button, &QToolButton::clicked, this, [this]() { refresh_schema(); });
+        }
         if (button->property("sidebarAddConnectionButton").toBool()) {
             connect(button, &QToolButton::clicked, this, [this]() { open_connection_dialog(); });
         }
@@ -3021,9 +3283,21 @@ QWidget* MainWindow::build_result_page()
 
     auto* toolbar = new QWidget;
     toolbar->setObjectName("panelToolbar");
-    auto* toolbarLayout = new QHBoxLayout(toolbar);
+    auto* toolbarLayout = new QVBoxLayout(toolbar);
     toolbarLayout->setContentsMargins(10, 8, 10, 8);
     toolbarLayout->setSpacing(8);
+
+    auto* toolbarTopRow = new QHBoxLayout;
+    toolbarTopRow->setContentsMargins(0, 0, 0, 0);
+    toolbarTopRow->setSpacing(8);
+
+    auto* toolbarSortRow = new QHBoxLayout;
+    toolbarSortRow->setContentsMargins(0, 0, 0, 0);
+    toolbarSortRow->setSpacing(8);
+
+    auto* toolbarActionsRow = new QHBoxLayout;
+    toolbarActionsRow->setContentsMargins(0, 0, 0, 0);
+    toolbarActionsRow->setSpacing(8);
 
     auto* reload = make_flat_icon_button(
         "view-refresh-symbolic",
@@ -3047,8 +3321,9 @@ QWidget* MainWindow::build_result_page()
 
     auto* sortColumn = new QLineEdit;
     sortColumn->setObjectName("tableSortColumnInput");
-    sortColumn->setPlaceholderText("Sort column");
-    sortColumn->setMinimumWidth(160);
+    sortColumn->setPlaceholderText("Column to sort");
+    sortColumn->setMinimumWidth(280);
+    sortColumn->setClearButtonEnabled(true);
     auto* sortDirection = new QCheckBox("ASC");
     sortDirection->setObjectName("tableSortDirectionToggle");
     sortDirection->setChecked(true);
@@ -3058,6 +3333,36 @@ QWidget* MainWindow::build_result_page()
         "Apply Sort",
         "Sort"
     );
+    sortButton->setObjectName("accentPillButton");
+
+    auto* sortSection = new QFrame;
+    sortSection->setObjectName("tableSortSection");
+    auto* sortSectionLayout = new QHBoxLayout(sortSection);
+    sortSectionLayout->setContentsMargins(12, 10, 12, 10);
+    sortSectionLayout->setSpacing(10);
+
+    auto* sortTitle = new QLabel("Sort rows");
+    sortTitle->setObjectName("fieldCaption");
+    auto* sortHint = new QLabel("Enter a column name and press Enter");
+    sortHint->setObjectName("dimCaption");
+    auto* sortCopy = new QVBoxLayout;
+    sortCopy->setContentsMargins(0, 0, 0, 0);
+    sortCopy->setSpacing(2);
+    sortCopy->addWidget(sortTitle);
+    sortCopy->addWidget(sortHint);
+
+    auto* sortDirectionLabel = new QLabel("Direction");
+    sortDirectionLabel->setObjectName("fieldCaption");
+    auto* sortDirectionLayout = new QVBoxLayout;
+    sortDirectionLayout->setContentsMargins(0, 0, 0, 0);
+    sortDirectionLayout->setSpacing(4);
+    sortDirectionLayout->addWidget(sortDirectionLabel);
+    sortDirectionLayout->addWidget(sortDirection);
+
+    sortSectionLayout->addLayout(sortCopy);
+    sortSectionLayout->addWidget(sortColumn, 1);
+    sortSectionLayout->addLayout(sortDirectionLayout);
+    sortSectionLayout->addWidget(sortButton);
 
     auto* add = make_flat_icon_button(
         "list-add-symbolic",
@@ -3113,26 +3418,29 @@ QWidget* MainWindow::build_result_page()
     spinner->setObjectName("tableResultSpinner");
     spinner->hide();
 
-    toolbarLayout->addWidget(reload);
-    toolbarLayout->addWidget(prev);
-    toolbarLayout->addWidget(next);
-    toolbarLayout->addWidget(make_toolbar_separator());
-    toolbarLayout->addWidget(sortColumn);
-    toolbarLayout->addWidget(sortDirection);
-    toolbarLayout->addWidget(sortButton);
-    toolbarLayout->addWidget(make_toolbar_separator());
-    toolbarLayout->addWidget(add);
-    toolbarLayout->addWidget(duplicate);
-    toolbarLayout->addWidget(edit);
-    toolbarLayout->addWidget(remove);
-    toolbarLayout->addWidget(make_toolbar_separator());
-    toolbarLayout->addWidget(copyCell);
-    toolbarLayout->addWidget(copyJson);
-    toolbarLayout->addWidget(copyCsv);
-    toolbarLayout->addWidget(exportCsv);
-    toolbarLayout->addStretch(1);
-    toolbarLayout->addWidget(spinner);
-    toolbarLayout->addWidget(status);
+    toolbarTopRow->addWidget(reload);
+    toolbarTopRow->addWidget(prev);
+    toolbarTopRow->addWidget(next);
+    toolbarTopRow->addStretch(1);
+    toolbarTopRow->addWidget(spinner);
+    toolbarTopRow->addWidget(status);
+
+    toolbarSortRow->addWidget(sortSection, 1);
+
+    toolbarActionsRow->addWidget(add);
+    toolbarActionsRow->addWidget(duplicate);
+    toolbarActionsRow->addWidget(edit);
+    toolbarActionsRow->addWidget(remove);
+    toolbarActionsRow->addWidget(make_toolbar_separator());
+    toolbarActionsRow->addWidget(copyCell);
+    toolbarActionsRow->addWidget(copyJson);
+    toolbarActionsRow->addWidget(copyCsv);
+    toolbarActionsRow->addWidget(exportCsv);
+    toolbarActionsRow->addStretch(1);
+
+    toolbarLayout->addLayout(toolbarTopRow);
+    toolbarLayout->addLayout(toolbarSortRow);
+    toolbarLayout->addLayout(toolbarActionsRow);
 
     auto* model = new QStandardItemModel(page);
     model->setObjectName("tableResultModel");
@@ -3181,6 +3489,9 @@ QWidget* MainWindow::build_result_page()
         load_current_table_page();
     });
     connect(sortButton, &QToolButton::clicked, this, [this]() {
+        apply_current_sort();
+    });
+    connect(sortColumn, &QLineEdit::returnPressed, this, [this]() {
         apply_current_sort();
     });
     connect(sortDirection, &QCheckBox::toggled, this, [sortDirection](bool checked) {
@@ -3355,6 +3666,152 @@ QWidget* MainWindow::build_structure_page()
     layout->addWidget(structureSplitter, 1);
 
     return page;
+}
+
+void MainWindow::refresh_schema()
+{
+    if (connected_connection_id_.isEmpty()) {
+        load_connections();
+        status_label_->setText("Connections refreshed. Select one and click Connect.");
+        return;
+    }
+
+    load_schema_for_connection(connected_connection_id_);
+}
+
+void MainWindow::show_preferences_dialog()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("Preferences");
+    dialog.setModal(true);
+    dialog.resize(420, 0);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(18, 18, 18, 18);
+    layout->setSpacing(12);
+
+    auto* titleLabel = new QLabel("Preferences", &dialog);
+    titleLabel->setObjectName("windowTitle");
+    layout->addWidget(titleLabel);
+
+    auto* introLabel = new QLabel(
+        "Match the GTK frontend by choosing whether the Qt app should follow the system appearance or force a light or dark theme."
+    );
+    introLabel->setObjectName("placeholderDescription");
+    introLabel->setWordWrap(true);
+    layout->addWidget(introLabel);
+
+    QVBoxLayout* cardLayout = nullptr;
+    auto* card = create_dialog_card(&dialog, cardLayout);
+
+    auto* followSystem = new QRadioButton("Follow system theme", &dialog);
+    auto* forceLight = new QRadioButton("Force light mode", &dialog);
+    auto* forceDark = new QRadioButton("Force dark mode", &dialog);
+
+    const auto currentMode = current_theme_mode();
+    followSystem->setChecked(currentMode == ThemeMode::FollowSystem);
+    forceLight->setChecked(currentMode == ThemeMode::ForceLight);
+    forceDark->setChecked(currentMode == ThemeMode::ForceDark);
+
+    cardLayout->addWidget(followSystem);
+    cardLayout->addWidget(forceLight);
+    cardLayout->addWidget(forceDark);
+    layout->addWidget(card);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    layout->addWidget(buttons);
+
+    auto applyMode = [this, followSystem, forceLight]() {
+        const auto mode = followSystem->isChecked()
+            ? ThemeMode::FollowSystem
+            : forceLight->isChecked() ? ThemeMode::ForceLight
+                                      : ThemeMode::ForceDark;
+        apply_theme_mode(mode);
+        status_label_->setText(
+            mode == ThemeMode::FollowSystem
+                ? "Theme now follows the system appearance"
+                : mode == ThemeMode::ForceLight ? "Forced light theme enabled"
+                                                : "Forced dark theme enabled"
+        );
+    };
+
+    connect(followSystem, &QRadioButton::toggled, &dialog, [applyMode](bool checked) {
+        if (checked) {
+            applyMode();
+        }
+    });
+    connect(forceLight, &QRadioButton::toggled, &dialog, [applyMode](bool checked) {
+        if (checked) {
+            applyMode();
+        }
+    });
+    connect(forceDark, &QRadioButton::toggled, &dialog, [applyMode](bool checked) {
+        if (checked) {
+            applyMode();
+        }
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    dialog.exec();
+}
+
+void MainWindow::show_about_dialog()
+{
+    const auto version = QCoreApplication::applicationVersion().isEmpty()
+        ? "unknown"
+        : QCoreApplication::applicationVersion();
+    QMessageBox about(this);
+    about.setWindowTitle("About LitheDB");
+    about.setIcon(QMessageBox::Information);
+    about.setText("LitheDB");
+    about.setInformativeText(
+        QString(
+            "Qt6 desktop frontend for LitheDB.\n\nVersion: %1\nWebsite: https://github.com/tuansaker1412/lithedb\nIssues: https://github.com/tuansaker1412/lithedb/issues"
+        )
+            .arg(version)
+    );
+    about.exec();
+}
+
+void MainWindow::show_shortcuts_dialog()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("Keyboard Shortcuts");
+    dialog.setModal(true);
+    dialog.resize(440, 0);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(18, 18, 18, 18);
+    layout->setSpacing(12);
+
+    auto* titleLabel = new QLabel("Keyboard Shortcuts", &dialog);
+    titleLabel->setObjectName("windowTitle");
+    layout->addWidget(titleLabel);
+
+    QVBoxLayout* cardLayout = nullptr;
+    auto* card = create_dialog_card(&dialog, cardLayout);
+    const QStringList shortcuts = {
+        "Ctrl+T: New query tab",
+        "Ctrl+W: Close query tab",
+        "Ctrl+Enter: Run query",
+        "Ctrl+R: Refresh schema",
+        "Ctrl+Shift+C: New connection",
+        "F5: Reload table data",
+        "F1: Show shortcuts",
+    };
+    for (const auto& line : shortcuts) {
+        auto* label = new QLabel(line, &dialog);
+        label->setObjectName("sectionTitle");
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        cardLayout->addWidget(label);
+    }
+    layout->addWidget(card);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    dialog.exec();
 }
 
 void MainWindow::copy_selected_cell()

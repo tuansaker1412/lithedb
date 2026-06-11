@@ -49,6 +49,10 @@ private:
     void create_query_tab(const QString& title = QString());
     void close_active_query_tab();
     void update_query_editor_visibility();
+    void refresh_schema();
+    void show_preferences_dialog();
+    void show_about_dialog();
+    void show_shortcuts_dialog();
     QueryTabState* current_query_tab();
     QueryTabState* query_tab_for_page(QWidget* page);
     void remove_query_tab_page(QWidget* page);

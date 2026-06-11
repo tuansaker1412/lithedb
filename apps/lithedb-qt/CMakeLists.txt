@@ -50,6 +50,7 @@ qt_add_executable(lithedb-qt
 )
 
 target_link_libraries(lithedb-qt PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+target_compile_definitions(lithedb-qt PRIVATE LITHEDB_QT_VERSION="${PROJECT_VERSION}")
 
 set_target_properties(
     lithedb-qt
