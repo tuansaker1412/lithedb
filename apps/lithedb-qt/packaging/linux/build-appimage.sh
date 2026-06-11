@@ -6,7 +6,6 @@ QT_APP_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 REPO_ROOT=$(cd "$QT_APP_DIR/../.." && pwd)
 BUILD_DIR=${1:-"$QT_APP_DIR/build"}
 APPDIR=${APPDIR:-"$BUILD_DIR/AppDir"}
-VERSION=${LITHEDB_VERSION:-$(sed -n 's/^project(LitheDBQt VERSION \\([^ ]*\\) LANGUAGES CXX)$/\\1/p' "$QT_APP_DIR/CMakeLists.txt")}
 LINUXDEPLOYQT_BIN=${LINUXDEPLOYQT_BIN:-linuxdeployqt}
 
 if ! command -v "$LINUXDEPLOYQT_BIN" >/dev/null 2>&1; then
@@ -59,12 +58,14 @@ fi
     -unsupported-allow-new-glibc \
     -bundle-non-qt-libs
 
+OUTPUT_APPIMAGE="$BUILD_DIR/LitheDB-x86_64.AppImage"
+
 for artifact in "$BUILD_DIR"/*.AppImage; do
     if [[ -f "$artifact" ]]; then
-        mv "$artifact" "$BUILD_DIR/LitheDB-${VERSION}-linux-x86_64.AppImage"
+        mv "$artifact" "$OUTPUT_APPIMAGE"
         break
     fi
 done
 
 echo "AppImage created at:"
-ls -lh "$BUILD_DIR"/LitheDB-*.AppImage
+ls -lh "$OUTPUT_APPIMAGE"

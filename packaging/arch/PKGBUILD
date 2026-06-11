@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')
 depends=('gtk4' 'libadwaita' 'gtksourceview5' 'sqlite')
-makedepends=('rust' 'cargo')
+makedepends=('rust' 'cargo' 'sqlite')
 source=()
 sha256sums=()
 

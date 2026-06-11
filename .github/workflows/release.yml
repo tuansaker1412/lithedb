@@ -149,6 +149,7 @@ jobs:
             ninja \
             openssl \
             qt6-base \
+            sqlite \
             rust
 
       - name: Checkout
