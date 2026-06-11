@@ -28,9 +28,23 @@ cargo build -p lithedb-bridge --release --locked --manifest-path "$REPO_ROOT/Car
 rm -rf "$APPDIR"
 DESTDIR="$APPDIR" cmake --install "$BUILD_DIR" --prefix /usr --strip --config Release
 
+SVG_ICON="$APPDIR/usr/share/icons/hicolor/scalable/apps/io.github.tuansaker1412.LitheDB.svg"
+PNG_ICON_DIR="$APPDIR/usr/share/icons/hicolor/256x256/apps"
+PNG_ICON="$PNG_ICON_DIR/io.github.tuansaker1412.LitheDB.png"
+
+if [[ -f "$SVG_ICON" ]]; then
+    if ! command -v rsvg-convert >/dev/null 2>&1; then
+        echo "Error: rsvg-convert not found. Install librsvg2-bin to rasterize the app icon for AppImage packaging."
+        exit 1
+    fi
+    mkdir -p "$PNG_ICON_DIR"
+    rsvg-convert -w 256 -h 256 "$SVG_ICON" -o "$PNG_ICON"
+fi
+
 "$LINUXDEPLOYQT_BIN" \
     "$APPDIR/usr/share/applications/io.github.tuansaker1412.LitheDB.desktop" \
     -appimage \
+    -verbose=2 \
     -unsupported-allow-new-glibc \
     -bundle-non-qt-libs
 

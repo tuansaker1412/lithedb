@@ -89,7 +89,8 @@ jobs:
             libssl-dev \
             libfuse2 \
             patchelf \
-            desktop-file-utils
+            desktop-file-utils \
+            librsvg2-bin
 
       - name: Install linuxdeployqt
         run: |
