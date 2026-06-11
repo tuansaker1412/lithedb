@@ -3459,6 +3459,7 @@ QWidget* MainWindow::build_result_page()
     grid->setAlternatingRowColors(false);
     grid->setSortingEnabled(false);
     grid->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    grid->setContextMenuPolicy(Qt::CustomContextMenu);
 
     auto* stack = new QStackedWidget(page);
     stack->setObjectName("tableResultStack");
@@ -3503,6 +3504,48 @@ QWidget* MainWindow::build_result_page()
     connect(exportCsv, &QToolButton::clicked, this, [this]() { export_current_table_csv(); });
     connect(grid, &QTableView::doubleClicked, this, [this, grid, model](const QModelIndex& index) {
         open_cell_value_dialog(grid, model, index, true);
+    });
+    connect(grid, &QTableView::customContextMenuRequested, this, [this, grid](const QPoint& pos) {
+        const auto index = grid->indexAt(pos);
+        if (!index.isValid()) {
+            return;
+        }
+
+        grid->setCurrentIndex(index);
+        if (grid->selectionModel()) {
+            grid->selectionModel()->select(
+                index,
+                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows | QItemSelectionModel::Current
+            );
+        }
+
+        QMenu menu(grid);
+        auto* editAction = menu.addAction(
+            themed_icon("document-edit-symbolic", QStyle::SP_FileDialogDetailedView),
+            "Edit"
+        );
+        auto* duplicateAction = menu.addAction(
+            themed_icon("edit-copy-symbolic", QStyle::SP_FileDialogContentsView),
+            "Duplicate"
+        );
+        menu.addSeparator();
+        auto* deleteAction = menu.addAction(
+            themed_icon("user-trash-symbolic", QStyle::SP_TrashIcon),
+            "Delete"
+        );
+
+        QAction* chosen = menu.exec(grid->viewport()->mapToGlobal(pos));
+        if (chosen == editAction) {
+            edit_current_row();
+            return;
+        }
+        if (chosen == duplicateAction) {
+            duplicate_current_row();
+            return;
+        }
+        if (chosen == deleteAction) {
+            delete_current_row();
+        }
     });
     connect(add, &QToolButton::clicked, this, [this]() { insert_current_row(); });
     connect(duplicate, &QToolButton::clicked, this, [this]() { duplicate_current_row(); });
