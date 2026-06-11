@@ -84,7 +84,7 @@ constexpr int RolePort = Qt::UserRole + 8;
 constexpr int RoleUsername = Qt::UserRole + 9;
 constexpr int RoleSsl = Qt::UserRole + 10;
 constexpr int RoleCellIsNull = Qt::UserRole + 11;
-constexpr int MinSidebarWidth = 240;
+constexpr int MinSidebarWidth = 220;
 constexpr int MinWorkspaceWidth = 420;
 constexpr int MinQueryPaneHeight = 180;
 constexpr int MinResultPaneHeight = 220;
@@ -1938,6 +1938,9 @@ void MainWindow::build_central_layout()
     query_stack_->setMinimumWidth(MinWorkspaceWidth);
     data_stack_->setMinimumWidth(MinWorkspaceWidth);
 
+    main_splitter_->insertWidget(0, sidebar);
+    main_splitter_->insertWidget(1, query_result_splitter_);
+
     main_splitter_->setChildrenCollapsible(false);
     main_splitter_->setCollapsible(0, false);
     main_splitter_->setCollapsible(1, false);
@@ -1949,7 +1952,7 @@ void MainWindow::build_central_layout()
     main_splitter_->setStretchFactor(1, 1);
     query_result_splitter_->setStretchFactor(0, 1);
     query_result_splitter_->setStretchFactor(1, 2);
-    main_splitter_->setSizes({320, 880});
+    main_splitter_->setSizes({260, 940});
     query_result_splitter_->setSizes({300, 500});
 
     rootLayout->addWidget(main_splitter_, 1);
