@@ -28,6 +28,17 @@ cargo build -p lithedb-bridge --release --locked --manifest-path "$REPO_ROOT/Car
 rm -rf "$APPDIR"
 DESTDIR="$APPDIR" cmake --install "$BUILD_DIR" --prefix /usr --strip --config Release
 
+GLIBC_COPYRIGHT_SRC="/usr/share/doc/libc6/copyright"
+GLIBC_COPYRIGHT_DEST="$APPDIR/usr/share/doc/libc6/copyright"
+
+if [[ -f "$GLIBC_COPYRIGHT_SRC" ]]; then
+    mkdir -p "$(dirname "$GLIBC_COPYRIGHT_DEST")"
+    cp "$GLIBC_COPYRIGHT_SRC" "$GLIBC_COPYRIGHT_DEST"
+else
+    echo "Error: $GLIBC_COPYRIGHT_SRC not found. linuxdeployqt requires it when using -unsupported-allow-new-glibc."
+    exit 1
+fi
+
 SVG_ICON="$APPDIR/usr/share/icons/hicolor/scalable/apps/io.github.tuansaker1412.LitheDB.svg"
 PNG_ICON_DIR="$APPDIR/usr/share/icons/hicolor/256x256/apps"
 PNG_ICON="$PNG_ICON_DIR/io.github.tuansaker1412.LitheDB.png"
