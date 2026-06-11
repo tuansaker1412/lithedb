@@ -1,13 +1,13 @@
 # Maintainer: LitheDB Contributors <contact@lithedb.dev>
 pkgname=lithedb-qt
-pkgver=0.1.2
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="Qt6 desktop database client powered by a shared Rust core"
 arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')
 depends=('qt6-base' 'hicolor-icon-theme')
-makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'rust')
+makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'openssl' 'rust')
 source=()
 sha256sums=()
 

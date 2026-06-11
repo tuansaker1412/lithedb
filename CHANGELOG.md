@@ -4,6 +4,21 @@ All notable changes to this project should be documented in this file.
 
 The format is intentionally lightweight and release-oriented.
 
+## [1.0.0] - 2026-06-11
+
+### Added
+
+- Production release documentation for the Qt6 desktop frontend
+- GitHub Actions CI workflow for bridge and cross-platform Qt build validation
+- Multi-platform release workflow documentation aligned with Linux, Windows, and macOS packaging
+
+### Changed
+
+- Promoted the Qt6 frontend to the official production UI
+- Froze the GTK frontend as a legacy, non-release target kept in-repo for compatibility
+- Updated version metadata across Cargo, CMake, packaging files, docs, and release guidance to `1.0.0`
+- Reframed `README.md` and `lithedb-docs/docs/` around the Qt production release line
+
 ## [0.1.2] - 2026-06-03
 
 ### Added

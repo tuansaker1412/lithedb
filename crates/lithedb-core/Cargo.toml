@@ -1,6 +1,6 @@
 [package]
 name = "lithedb-core"
-version = "0.1.2"
+version = "1.0.0"
 edition = "2021"
 description = "Shared core services for LitheDB frontends"
 license = "MIT"

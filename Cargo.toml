@@ -3,9 +3,9 @@ members = ["crates/lithedb-core", "crates/lithedb-bridge"]
 
 [package]
 name = "lithedb"
-version = "0.1.2"
+version = "1.0.0"
 edition = "2021"
-description = "LitheDB is a lightweight native database client for Linux built with Rust, GTK4, and libadwaita"
+description = "LitheDB legacy GTK frontend and shared workspace for the Qt-based cross-platform desktop client"
 license = "MIT"
 homepage = "https://github.com/tuansaker1412/lithedb"
 repository = "https://github.com/tuansaker1412/lithedb"
@@ -46,7 +46,8 @@ maintainer = "LitheDB Contributors <contact@lithedb.dev>"
 copyright = "2026, LitheDB Contributors"
 license-file = ["LICENSE", "4"]
 extended-description = """\
-LitheDB is a lightweight native database client for Linux built with Rust, GTK4, and libadwaita.
+Legacy GTK frontend for the LitheDB workspace.
+The production desktop release is the Qt6 frontend packaged separately, while this crate remains available for compatibility and internal reference.
 Supports PostgreSQL, MySQL, and SQLite with features including:
 - SQL editor with syntax highlighting
 - Result grid with pagination and CSV export

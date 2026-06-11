@@ -1,8 +1,8 @@
 # Maintainer: LitheDB Contributors <contact@lithedb.dev>
 pkgname=lithedb
-pkgver=0.1.2
+pkgver=1.0.0
 pkgrel=1
-pkgdesc="LitheDB is a lightweight native database client for Linux built with Rust, GTK4, and libadwaita"
+pkgdesc="Legacy GTK frontend for the LitheDB workspace"
 arch=('x86_64')
 url="https://github.com/tuansaker1412/lithedb"
 license=('MIT')

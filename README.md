@@ -1,224 +1,165 @@
 # LitheDB
 
-Lightweight database client built in Rust. The current production UI targets Linux with GTK4/libadwaita, and the repository now includes an experimental Qt6 Widgets frontend scaffold for Windows and macOS.
+LitheDB is a cross-platform desktop database client built with a shared Rust core and a production Qt6 Widgets frontend.
 
-LitheDB focuses on a fast desktop workflow for PostgreSQL, MySQL, and SQLite with native Linux packaging and secure credential storage.
+`v1.0.0` is the first official multi-platform production release. The Qt app under `apps/lithedb-qt/` is now the maintained desktop frontend for Linux, macOS, and Windows. The older GTK frontend under `src/` remains in the repository as a legacy reference and fallback code path, but it is no longer the release target and will not receive feature work.
 
 ## Features
 
 - PostgreSQL, MySQL, and SQLite support
-- Native GTK4/libadwaita interface
-- Experimental Qt6 Widgets frontend scaffold for cross-platform work
-- Connection manager with connect, disconnect, edit, and delete flows
-- Secure credential storage via system keyring with encrypted fallback
-- Schema browser with async loading
-- Table data viewer with pagination, sorting, copy, CSV export, and row editing
-- SQL editor with syntax highlighting and multiple tabs
-- Keyboard shortcuts for common query and navigation actions
-- Linux distribution packages: `.deb`, `.rpm`, Arch package, and Flatpak
+- Qt6 desktop UI for Linux, macOS, and Windows
+- Shared Rust core for config, DB drivers, state, and secure credential handling
+- Secure password storage via system keyring with encrypted fallback
+- Connection management, schema browsing, query tabs, table data browsing, and row CRUD
+- CSV export, copy helpers, and keyboard shortcuts
+- GitHub Actions release pipeline that builds multi-platform artifacts automatically
 
-## Download
+## Official Release Targets
 
-The recommended way to install LitheDB is from **GitHub Releases**.
+Production releases are published from GitHub Releases and should include:
 
-Release assets should include:
+- Linux `.deb`
+- Linux `.rpm`
+- Linux `.pkg.tar.zst`
+- Linux `AppImage`
+- Windows portable `.zip`
+- Windows installer `.exe`
+- macOS `.dmg`
+- `SHA256SUMS`
 
-- `lithedb_<version>_amd64.deb` for Debian/Ubuntu/Linux Mint/Pop!_OS
-- `lithedb-<version>-1.x86_64.rpm` for Fedora/RHEL/openSUSE
-- `lithedb-<version>-1-x86_64.pkg.tar.zst` for Arch Linux
-- Optional: a Flatpak build or Flatpak bundle
-
-If you publish releases on GitHub, attach those built artifacts to each tagged release so users do not need to compile from source.
+Flatpak and the GTK/Linux packaging flow remain in the repository as legacy material and are not part of the official `v1.0.0` production release line.
 
 ## Install
 
 ### Debian/Ubuntu
 
 ```bash
-sudo dpkg -i lithedb_*.deb
+sudo dpkg -i ./*.deb
 sudo apt-get install -f
 ```
 
 ### Fedora/RHEL
 
 ```bash
-sudo dnf install ./lithedb-*.rpm
+sudo dnf install ./*.rpm
 ```
 
 ### openSUSE
 
 ```bash
-sudo zypper install ./lithedb-*.rpm
+sudo zypper install ./*.rpm
 ```
 
 ### Arch Linux
 
 ```bash
-sudo pacman -U ./lithedb-*.pkg.tar.zst
+sudo pacman -U ./*.pkg.tar.zst
 ```
 
-### Flatpak
+### Windows
 
-If you distribute a Flatpak build, install it with the command appropriate to your published artifact.
+- Use the published installer `.exe`, or
+- unpack the portable `.zip` and run `lithedb-qt.exe`
 
-To run the Flatpak app:
+### macOS
 
-```bash
-flatpak run io.github.tuansaker1412.LitheDB
-```
+- Open the published `.dmg`
+- drag `LitheDB.app` into `Applications`
 
 ## Build From Source
 
-### Requirements
+The production desktop build is the Qt frontend plus `lithedb-bridge`.
 
-- Rust stable toolchain
-- GTK4 development libraries
-- libadwaita development libraries
-- GtkSourceView 5 development libraries
-- libsecret development libraries
-- OpenSSL development libraries
+Detailed platform instructions live in:
 
-### Ubuntu 22.04+
+- `lithedb-docs/docs/BUILD.md`
+- `lithedb-docs/docs/RUN_AND_BUILD_GUIDE.md`
+- `lithedb-docs/docs/QT_BUILD_AND_PACKAGING.md`
+
+### Linux quick start
 
 ```bash
 sudo apt update
 sudo apt install -y \
-  build-essential pkg-config python3 \
-  libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev \
-  libsecret-1-dev libssl-dev \
-  flatpak flatpak-builder
+  build-essential cmake ninja-build pkg-config curl \
+  qt6-base-dev qt6-wayland \
+  libgl1-mesa-dev libxkbcommon-dev libfontconfig1-dev \
+  libssl-dev
 
 curl https://sh.rustup.rs -sSf | sh
 source "$HOME/.cargo/env"
 rustup toolchain install stable
+
+cargo build -p lithedb-bridge
+cmake -S apps/lithedb-qt -B apps/lithedb-qt/build -G Ninja
+cmake --build apps/lithedb-qt/build
+LITHEDB_BRIDGE_BIN=$PWD/target/debug/lithedb-bridge ./apps/lithedb-qt/build/lithedb-qt
 ```
 
-### Fedora 38+
+### Legacy GTK frontend
 
-```bash
-sudo dnf install -y \
-  gcc gcc-c++ make pkg-config python3 \
-  gtk4-devel libadwaita-devel gtksourceview5-devel \
-  libsecret-devel openssl-devel \
-  flatpak flatpak-builder rustup
-
-rustup default stable
-```
-
-### Arch Linux
-
-```bash
-sudo pacman -Syu --needed \
-  base-devel pkgconf python \
-  gtk4 libadwaita gtksourceview5 libsecret openssl \
-  flatpak flatpak-builder rustup
-
-rustup default stable
-```
-
-### Run GTK Frontend Locally
+The GTK frontend can still be built locally for reference:
 
 ```bash
 cargo run
 ```
 
-### Build Experimental Qt6 Widgets Frontend
+This path is kept for compatibility only. It is not the production release target.
 
-The Qt frontend lives in `apps/lithedb-qt` and mirrors the current GTK layout with:
+## Repository Layout
 
-- top toolbar
-- left connection/schema sidebar
-- top query tabs
-- bottom data tabs
-- status bar
+- `apps/lithedb-qt/`: production Qt6 desktop frontend
+- `crates/lithedb-core/`: shared Rust core
+- `crates/lithedb-bridge/`: bridge binary used by the Qt app
+- `src/`: legacy GTK frontend
+- `lithedb-docs/docs/`: project docs, release docs, verification docs, and historical notes
 
-Build it with CMake and Qt6 Widgets:
+## Release Process
 
-```bash
-cmake -S apps/lithedb-qt -B apps/lithedb-qt/build
-cmake --build apps/lithedb-qt/build
-```
-
-### Build Release Binary
-
-```bash
-cargo build --release
-```
-
-Output:
-
-```bash
-target/release/lithedb
-```
-
-## Package Builds
-
-Build commands already included in this repository:
-
-```bash
-./scripts/build-deb.sh
-./scripts/build-rpm.sh
-./scripts/build-arch.sh
-./scripts/build-flatpak.sh
-./scripts/build-all.sh
-```
-
-Expected output locations:
-
-- `.deb`: `target/debian/*.deb`
-- `.rpm`: `target/generate-rpm/*.rpm`
-- Arch package: `packaging/arch/*.pkg.tar.zst`
-
-## Releases
-
-For end users, GitHub Releases should contain built packages, not just source code.
-
-Maintainer flow:
+Maintainer flow for production releases:
 
 1. Update version metadata and release notes.
-2. Run:
+2. Run verification locally:
 
 ```bash
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test
+cargo check -p lithedb-bridge --locked
+cargo fmt --all -- --check
+cmake -S apps/lithedb-qt -B build-qt -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-qt --config Release
 ```
 
 3. Create and push a tag:
 
 ```bash
-git tag -a v0.1.2 -m "Release v0.1.2"
-git push origin v0.1.2
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
 ```
 
-This repository includes GitHub Actions release automation for tags matching `v*`. After the tag is pushed, Actions will:
+GitHub Actions will then:
 
-- build `.deb`
-- build `.rpm`
-- build `.pkg.tar.zst`
-- create or update the GitHub Release for that tag
-- upload package assets and `SHA256SUMS`
-
-GitHub will also provide `Source code (zip)` and `Source code (tar.gz)` automatically on the release page.
+- run CI validation
+- build Linux, Windows, and macOS release artifacts
+- create or update the GitHub Release
+- upload release packages and `SHA256SUMS`
 
 ## Usage
 
-1. Launch `lithedb`.
-2. Create a connection from the sidebar.
-3. Enter database settings and connect.
-4. Browse schemas and tables.
-5. Open table data or run SQL queries in editor tabs.
-6. Copy results, export CSV, and edit rows as needed.
+1. Launch the Qt app.
+2. Create or edit a connection.
+3. Connect to a database.
+4. Browse schema objects.
+5. Open table data or run SQL in query tabs.
+6. Export data or apply row-level CRUD operations as needed.
 
 ## Configuration
 
-The maximum number of rows loaded into memory for a manual SQL query is configurable. Browsing tables remains paginated separately.
+The maximum number of rows loaded into memory for a manual SQL query is configurable.
 
 Priority order:
 
 1. Environment variable `LITHEDB_MAX_QUERY_ROWS`
 2. `~/.config/lithedb/settings.json`
-3. Default value: `1000`
+3. Default value `1000`
 
 Example:
 
@@ -228,51 +169,27 @@ Example:
 }
 ```
 
-Or:
-
-```bash
-LITHEDB_MAX_QUERY_ROWS=5000 cargo run --release
-```
-
 ## Security
 
 - Passwords are never stored in plaintext
-- Primary secret storage uses the system keyring
-- Fallback storage is encrypted with AES-GCM
-- Connection metadata is stored under `~/.config/lithedb/`
+- Primary storage uses the system keyring
+- Fallback storage uses AES-GCM encrypted secrets bound to machine and connection identity
+
+See `lithedb-docs/docs/SECURITY_NOTES.md` for the exact format and compatibility rules.
 
 ## Development
 
 ```bash
-cargo check
-cargo build
+cargo check -p lithedb-bridge
 cargo test
 cargo fmt
-cargo clippy
+cargo clippy -p lithedb-core -p lithedb-bridge --all-targets -- -D warnings
 ```
 
 Ignored integration tests require live database instances and DSN environment variables:
 
 ```bash
 cargo test -- --ignored
-```
-
-## Project Layout
-
-```text
-.github/
-├── workflows/
-src/
-├── app.rs
-├── main.rs
-├── lib.rs
-├── state/
-├── ui/
-├── db/
-└── config/
-tests/
-packaging/
-scripts/
 ```
 
 ## Contributing
@@ -282,27 +199,11 @@ Contributions are welcome.
 Before opening a pull request:
 
 - keep changes scoped to the task
-- follow existing Rust and GTK patterns
+- follow existing Rust and Qt/shared-core patterns
 - avoid storing or logging secrets
 - run format, lint, and test checks
 
 Repository-specific contributor guidance is documented in `AGENTS.md`.
-
-## Donate
-
-If LitheDB is useful to you, consider supporting development.
-
-PayPal link placeholder:
-
-```text
-TODO: add PayPal URL
-```
-
-Donate button/image placeholder:
-
-```text
-TODO: add donate image or badge
-```
 
 ## License
 
