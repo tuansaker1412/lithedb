@@ -11,11 +11,13 @@ makedepends=('cargo' 'cmake' 'gcc' 'git' 'ninja' 'openssl' 'rust' 'sqlite' 'pkgc
 source=()
 sha256sums=()
 
-_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 _build_dir="$_repo_root/apps/lithedb-qt/build-arch"
 
 build() {
     cd "$_repo_root"
+    test -f Cargo.toml
+    test -f apps/lithedb-qt/CMakeLists.txt
     LIBSQLITE3_SYS_USE_PKG_CONFIG=1 \
     SQLITE3_STATIC=0 \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc \
