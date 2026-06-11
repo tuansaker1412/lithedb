@@ -5,7 +5,6 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 QT_APP_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 REPO_ROOT=$(cd "$QT_APP_DIR/../.." && pwd)
 BUILD_DIR=${1:-"$QT_APP_DIR/build"}
-APPDIR=${APPDIR:-"$BUILD_DIR/AppDir"}
 LINUXDEPLOYQT_BIN=${LINUXDEPLOYQT_BIN:-linuxdeployqt}
 
 if ! command -v "$LINUXDEPLOYQT_BIN" >/dev/null 2>&1; then
@@ -18,13 +17,19 @@ if [[ ! -d "$BUILD_DIR" ]]; then
     exit 1
 fi
 
+BUILD_DIR=$(cd "$BUILD_DIR" && pwd)
+APPDIR=${APPDIR:-"$BUILD_DIR/AppDir"}
+OUTPUT_APPIMAGE="$BUILD_DIR/LitheDB-x86_64.AppImage"
+
 if [[ ! -f "$QT_APP_DIR/packaging/linux/io.github.tuansaker1412.LitheDB.desktop" ]]; then
     echo "Error: Qt desktop file is missing."
     exit 1
 fi
 
+cd "$REPO_ROOT"
 cargo build -p lithedb-bridge --release --locked --manifest-path "$REPO_ROOT/Cargo.toml"
 rm -rf "$APPDIR"
+rm -f "$OUTPUT_APPIMAGE" "$BUILD_DIR"/LitheDB-*.AppImage "$REPO_ROOT"/LitheDB-*.AppImage
 DESTDIR="$APPDIR" cmake --install "$BUILD_DIR" --prefix /usr --strip --config Release
 
 GLIBC_COPYRIGHT_SRC="/usr/share/doc/libc6/copyright"
@@ -58,13 +63,20 @@ fi
     -unsupported-allow-new-glibc \
     -bundle-non-qt-libs
 
-OUTPUT_APPIMAGE="$BUILD_DIR/LitheDB-x86_64.AppImage"
+shopt -s nullglob
+appimage_artifacts=("$BUILD_DIR"/*.AppImage "$REPO_ROOT"/*.AppImage)
+shopt -u nullglob
 
-for artifact in "$BUILD_DIR"/*.AppImage; do
-    if [[ -f "$artifact" ]]; then
+if (( ${#appimage_artifacts[@]} == 0 )); then
+    echo "Error: linuxdeployqt completed but no AppImage artifact was found."
+    exit 1
+fi
+
+for artifact in "${appimage_artifacts[@]}"; do
+    if [[ "$artifact" != "$OUTPUT_APPIMAGE" ]]; then
         mv "$artifact" "$OUTPUT_APPIMAGE"
-        break
     fi
+    break
 done
 
 echo "AppImage created at:"
