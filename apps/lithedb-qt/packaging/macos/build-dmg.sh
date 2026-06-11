@@ -7,8 +7,21 @@ REPO_ROOT=$(cd "$QT_APP_DIR/../.." && pwd)
 BUILD_DIR=${1:-"$QT_APP_DIR/build"}
 STAGE_DIR="$BUILD_DIR/stage"
 APP_BUNDLE="$STAGE_DIR/LitheDB.app"
-VERSION=${LITHEDB_VERSION:-$(sed -n 's/^project(LitheDBQt VERSION \\([^ ]*\\) LANGUAGES CXX)$/\\1/p' "$QT_APP_DIR/CMakeLists.txt")}
+VERSION=${LITHEDB_VERSION:-}
 MACDEPLOYQT_BIN=${MACDEPLOYQT_BIN:-macdeployqt}
+
+if [[ -z "$VERSION" ]]; then
+    VERSION=$(sed -nE 's/^[[:space:]]*project[[:space:]]*\([[:space:]]*LitheDBQt[[:space:]]+VERSION[[:space:]]+([^[:space:]\)]+).*$/\1/p' "$QT_APP_DIR/CMakeLists.txt" | head -n 1)
+fi
+
+if [[ -z "$VERSION" ]]; then
+    VERSION=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' "$REPO_ROOT/Cargo.toml" | head -n 1)
+fi
+
+if [[ -z "$VERSION" ]]; then
+    echo "Error: could not determine LitheDB version. Set LITHEDB_VERSION or update project version metadata."
+    exit 1
+fi
 
 if ! command -v "$MACDEPLOYQT_BIN" >/dev/null 2>&1; then
     echo "Error: macdeployqt not found. Set MACDEPLOYQT_BIN or install Qt deployment tools."
@@ -61,6 +74,10 @@ if [[ ! -f "$APP_BINARY" ]]; then
 fi
 
 FINAL_DMG="$BUILD_DIR/LitheDB-${VERSION}-macos-x86_64.dmg"
+if [[ "$FINAL_DMG" == *"--"* ]]; then
+    echo "Error: invalid DMG filename resolved to $FINAL_DMG"
+    exit 1
+fi
 rm -f "$FINAL_DMG"
 
 found_artifact=false
