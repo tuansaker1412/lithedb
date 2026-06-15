@@ -79,6 +79,7 @@ private:
     void install_resize_tracking(QWidget* widget);
     void install_splitter_resize_cursors();
     Qt::Edges resize_edges_for_pos(const QPoint& pos) const;
+    Qt::Edges resize_edges_for_widget_pos(QWidget* watched, const QPoint& localPos) const;
     void update_resize_affordance(QWidget* watched, const QPoint& localPos);
     void clear_resize_affordance(QWidget* watched = nullptr);
     bool start_window_resize(Qt::Edges edges);
@@ -138,5 +139,6 @@ private:
     quint64 current_table_page_ = 0;
     quint64 current_table_page_size_ = 100;
     Qt::Edges active_resize_edges_ = Qt::Edges();
+    QWidget* resize_cursor_widget_ = nullptr;
     std::vector<QueryTabState> query_tab_states_;
 };

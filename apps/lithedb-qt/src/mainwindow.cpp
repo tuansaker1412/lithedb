@@ -1645,33 +1645,48 @@ Qt::Edges MainWindow::resize_edges_for_pos(const QPoint& pos) const
         return Qt::Edges();
     }
 
-    constexpr int edgeZone = 8;
-    constexpr int cornerZone = 10;
+    constexpr int edgeZone = 4;
     Qt::Edges edges;
-    const bool nearLeft = pos.x() <= edgeZone;
-    const bool nearRight = pos.x() >= width() - edgeZone;
-    const bool nearTop = pos.y() <= edgeZone;
-    const bool nearBottom = pos.y() >= height() - edgeZone;
-
-    const bool inTopCornerBand = pos.y() <= cornerZone;
-    const bool inBottomCornerBand = pos.y() >= height() - cornerZone;
-    const bool inLeftCornerBand = pos.x() <= cornerZone;
-    const bool inRightCornerBand = pos.x() >= width() - cornerZone;
-
-    if ((nearLeft && inTopCornerBand) || (nearLeft && inBottomCornerBand)) {
+    if (pos.x() >= 0 && pos.x() < edgeZone) {
         edges |= Qt::LeftEdge;
-    } else if ((nearRight && inTopCornerBand) || (nearRight && inBottomCornerBand)) {
+    } else if (pos.x() >= width() - edgeZone && pos.x() < width()) {
         edges |= Qt::RightEdge;
-    } else if (nearLeft || nearRight) {
-        edges |= nearLeft ? Qt::LeftEdge : Qt::RightEdge;
     }
 
-    if ((nearTop && inLeftCornerBand) || (nearTop && inRightCornerBand)) {
-        edges |= Qt::TopEdge;
-    } else if ((nearBottom && inLeftCornerBand) || (nearBottom && inRightCornerBand)) {
+    if (pos.y() >= height() - edgeZone && pos.y() < height()) {
         edges |= Qt::BottomEdge;
-    } else if (nearTop || nearBottom) {
-        edges |= nearTop ? Qt::TopEdge : Qt::BottomEdge;
+    }
+
+    return edges;
+}
+
+Qt::Edges MainWindow::resize_edges_for_widget_pos(QWidget* watched, const QPoint& localPos) const
+{
+    if (!watched) {
+        return Qt::Edges();
+    }
+
+    constexpr int edgeZone = 4;
+    const QRect localRect = watched->rect();
+    if (!localRect.contains(localPos)) {
+        return Qt::Edges();
+    }
+
+    const QPoint windowPos = watched == this ? localPos : watched->mapTo(this, localPos);
+    const Qt::Edges windowEdges = resize_edges_for_pos(windowPos);
+    if (windowEdges == Qt::Edges()) {
+        return Qt::Edges();
+    }
+
+    Qt::Edges edges;
+    if (windowEdges.testFlag(Qt::LeftEdge) && localPos.x() < edgeZone) {
+        edges |= Qt::LeftEdge;
+    }
+    if (windowEdges.testFlag(Qt::RightEdge) && localPos.x() >= localRect.width() - edgeZone) {
+        edges |= Qt::RightEdge;
+    }
+    if (windowEdges.testFlag(Qt::BottomEdge) && localPos.y() >= localRect.height() - edgeZone) {
+        edges |= Qt::BottomEdge;
     }
 
     return edges;
@@ -1683,8 +1698,7 @@ void MainWindow::update_resize_affordance(QWidget* watched, const QPoint& localP
         return;
     }
 
-    const QPoint windowPos = watched == this ? localPos : watched->mapTo(this, localPos);
-    const auto edges = resize_edges_for_pos(windowPos);
+    const auto edges = resize_edges_for_widget_pos(watched, localPos);
     active_resize_edges_ = edges;
 
     if (edges == Qt::Edges()) {
@@ -1693,8 +1707,12 @@ void MainWindow::update_resize_affordance(QWidget* watched, const QPoint& localP
     }
 
     const auto cursorShape = cursor_shape_for_edges(edges);
+    if (resize_cursor_widget_ && resize_cursor_widget_ != watched) {
+        resize_cursor_widget_->unsetCursor();
+    }
     setCursor(cursorShape);
     watched->setCursor(cursorShape);
+    resize_cursor_widget_ = watched;
 }
 
 void MainWindow::clear_resize_affordance(QWidget* watched)
@@ -1704,6 +1722,10 @@ void MainWindow::clear_resize_affordance(QWidget* watched)
     const QPoint localPos = mapFromGlobal(globalPos);
     if (resize_edges_for_pos(localPos) == Qt::Edges()) {
         unsetCursor();
+        if (resize_cursor_widget_) {
+            resize_cursor_widget_->unsetCursor();
+            resize_cursor_widget_ = nullptr;
+        }
         if (watched) {
             watched->unsetCursor();
         }
