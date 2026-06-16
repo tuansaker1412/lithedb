@@ -4,6 +4,7 @@
 #include <QString>
 #include <vector>
 
+class QApplication;
 class QLabel;
 class QLineEdit;
 class QCheckBox;
@@ -21,6 +22,8 @@ class QStackedWidget;
 class QStandardItemModel;
 class QWidget;
 class QPoint;
+
+void initialize_application_theme(QApplication& app);
 
 class MainWindow : public QMainWindow
 {
