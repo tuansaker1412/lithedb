@@ -3,7 +3,11 @@ use lithedb_core::db::driver::QueryResult;
 use crate::payloads::QueryResultPayload;
 use crate::support::with_connected_state;
 
-pub fn execute_query(connection_id: &str, database: &str, sql: &str) -> Result<QueryResult, String> {
+pub fn execute_query(
+    connection_id: &str,
+    database: &str,
+    sql: &str,
+) -> Result<QueryResult, String> {
     with_connected_state(connection_id, |state, _| async move {
         if !database.is_empty() {
             let _ = state.use_database(database).await;
@@ -39,4 +43,3 @@ pub fn query_payload(result: QueryResult) -> QueryResultPayload {
         truncated: result.truncated,
     }
 }
-

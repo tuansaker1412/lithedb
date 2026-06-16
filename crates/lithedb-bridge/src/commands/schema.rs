@@ -80,4 +80,3 @@ fn index_payload(index: IndexInfo) -> IndexPayload {
         primary: index.primary,
     }
 }
-

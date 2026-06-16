@@ -73,4 +73,3 @@ pub struct ConnectionInput {
     pub ssl: bool,
     pub save_password: Option<bool>,
 }
-

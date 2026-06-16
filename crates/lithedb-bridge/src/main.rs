@@ -23,8 +23,12 @@ fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     match parse_command(&args)? {
         Command::ListConnections => print_json(&commands::connections::list_connections()?),
-        Command::TestConnection { payload } => print_json(&commands::connections::test_connection(payload)?),
-        Command::SaveConnection { payload } => print_json(&commands::connections::save_connection(payload)?),
+        Command::TestConnection { payload } => {
+            print_json(&commands::connections::test_connection(payload)?)
+        }
+        Command::SaveConnection { payload } => {
+            print_json(&commands::connections::save_connection(payload)?)
+        }
         Command::DeleteConnection { connection_id } => {
             print_json(&commands::connections::delete_connection(connection_id)?)
         }
@@ -45,19 +49,25 @@ fn run() -> Result<(), String> {
             page,
             page_size,
             order_by,
-        } => print_json(&commands::query::query_payload(commands::query::fetch_table(
-            connection_id,
-            database,
-            table,
-            page,
-            page_size,
-            order_by,
-        )?)),
+        } => print_json(&commands::query::query_payload(
+            commands::query::fetch_table(
+                connection_id,
+                database,
+                table,
+                page,
+                page_size,
+                order_by,
+            )?,
+        )),
         Command::TableStructure {
             connection_id,
             database,
             table,
-        } => print_json(&commands::schema::table_structure(connection_id, database, table)?),
+        } => print_json(&commands::schema::table_structure(
+            connection_id,
+            database,
+            table,
+        )?),
         Command::InsertRow {
             connection_id,
             database,

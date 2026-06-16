@@ -1,9 +1,17 @@
 pub enum Command<'a> {
     ListConnections,
-    TestConnection { payload: &'a str },
-    SaveConnection { payload: &'a str },
-    DeleteConnection { connection_id: &'a str },
-    ListSchema { connection_id: &'a str },
+    TestConnection {
+        payload: &'a str,
+    },
+    SaveConnection {
+        payload: &'a str,
+    },
+    DeleteConnection {
+        connection_id: &'a str,
+    },
+    ListSchema {
+        connection_id: &'a str,
+    },
     ExecuteQuery {
         connection_id: &'a str,
         database: &'a str,
@@ -152,4 +160,3 @@ pub fn parse_command(args: &[String]) -> Result<Command<'_>, String> {
         _ => Err(format!("unknown command: {command}")),
     }
 }
-
