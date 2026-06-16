@@ -53,6 +53,8 @@ connections.json
 # Qt builds
 apps/lithedb-qt/build/
 apps/lithedb-qt/.qtc_clangd/
+build/
+build-qt/
 
 
 # Debian package artifacts

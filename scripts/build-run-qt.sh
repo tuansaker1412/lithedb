@@ -17,7 +17,12 @@ case "$BRIDGE_PROFILE" in
 esac
 
 BRIDGE_BIN="$ROOT_DIR/target/$BRIDGE_PROFILE/lithedb-bridge"
-QT_BIN="$QT_BUILD_DIR/lithedb-qt"
+
+QT_BIN_CANDIDATES=(
+    "$QT_BUILD_DIR/LitheDB"
+    "$QT_BUILD_DIR/lithedb-qt"
+)
+QT_BIN=""
 
 CARGO_ARGS=(-p lithedb-bridge)
 if [[ "$BRIDGE_PROFILE" == "release" ]]; then
@@ -43,6 +48,19 @@ cmake --build "$QT_BUILD_DIR" -j"${LITHEDB_QT_BUILD_JOBS:-4}"
 
 if [[ ! -x "$BRIDGE_BIN" ]]; then
     echo "Bridge binary not found: $BRIDGE_BIN" >&2
+    exit 1
+fi
+
+for candidate in "${QT_BIN_CANDIDATES[@]}"; do
+    if [[ -x "$candidate" ]]; then
+        QT_BIN="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$QT_BIN" ]]; then
+    echo "Qt binary not found. Checked:" >&2
+    printf '  %s\n' "${QT_BIN_CANDIDATES[@]}" >&2
     exit 1
 fi
 
