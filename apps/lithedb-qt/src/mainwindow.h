@@ -1,29 +1,29 @@
 #pragma once
 
+#include "models/query_tab_state.h"
+
 #include <QMainWindow>
 #include <QString>
 #include <vector>
 
 class QApplication;
+class QEvent;
+class QJsonObject;
 class QLabel;
-class QLineEdit;
-class QCheckBox;
-class QComboBox;
-class QPlainTextEdit;
-class QProgressBar;
-class QPushButton;
-class QToolButton;
+class QModelIndex;
+class QObject;
 class QSplitter;
 class QTabWidget;
-class QToolBar;
-class QTreeView;
 class QTableView;
+class QToolBar;
 class QStackedWidget;
 class QStandardItemModel;
 class QWidget;
 class QPoint;
-
-void initialize_application_theme(QApplication& app);
+class ConnectionSidebarWidget;
+class QueryEditorTabWidget;
+class QueryResultWidget;
+class TablePageWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -34,16 +34,6 @@ public:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
-    struct QueryTabState {
-        QWidget* page = nullptr;
-        QComboBox* connection_combo = nullptr;
-        QComboBox* database_combo = nullptr;
-        QPlainTextEdit* editor = nullptr;
-        QPushButton* run_button = nullptr;
-        QLabel* status_label = nullptr;
-        QProgressBar* spinner = nullptr;
-    };
-
     void build_toolbar();
     void build_central_layout();
     void seed_sidebar();
@@ -56,8 +46,8 @@ private:
     void show_preferences_dialog();
     void show_about_dialog();
     void show_shortcuts_dialog();
-    QueryTabState* current_query_tab();
-    QueryTabState* query_tab_for_page(QWidget* page);
+    QueryEditorTabWidget* current_query_tab();
+    QueryEditorTabWidget* query_tab_for_page(QWidget* page);
     void remove_query_tab_page(QWidget* page);
     void reorder_query_tabs(int from, int to);
     void load_connections();
@@ -70,15 +60,19 @@ private:
     void delete_selected_connection();
     void load_schema_for_connection(const QString& connectionId);
     void execute_query_for_page(QWidget* page);
+    void copy_query_result_cell(QueryResultWidget* widget);
+    void copy_query_result_row_json(QueryResultWidget* widget);
+    void copy_query_result_row_csv(QueryResultWidget* widget);
+    void export_query_result_csv(QueryResultWidget* widget);
     void load_table_content(const QString& connectionId, const QString& database, const QString& table);
     void reload_current_table();
     void load_current_table_page();
     void apply_current_sort();
     void sync_current_table_page();
-    QWidget* ensure_table_tab(const QString& connectionId, const QString& database, const QString& table);
-    void bind_table_page(QWidget* tablePage);
-    void set_table_page_loading(QWidget* tablePage, bool loading, const QString& message);
-    void populate_structure_page(QWidget* tablePage, const QJsonObject& object);
+    TablePageWidget* ensure_table_tab(const QString& connectionId, const QString& database, const QString& table);
+    TablePageWidget* current_table_page() const;
+    void set_table_page_loading(TablePageWidget* tablePage, bool loading, const QString& message);
+    void populate_structure_page(TablePageWidget* tablePage, const QJsonObject& object);
     void install_resize_tracking(QWidget* widget);
     void install_splitter_resize_cursors();
     Qt::Edges resize_edges_for_pos(const QPoint& pos) const;
@@ -105,8 +99,6 @@ private:
     void edit_current_row();
     void delete_current_row();
     QString bridge_binary_path() const;
-    QWidget* build_result_page();
-    QWidget* build_structure_page();
 
     QToolBar* toolbar_ = nullptr;
     QSplitter* main_splitter_ = nullptr;
@@ -115,25 +107,13 @@ private:
     QTabWidget* query_tabs_ = nullptr;
     QTabWidget* data_tabs_ = nullptr;
     QStackedWidget* data_stack_ = nullptr;
-    QStackedWidget* sidebar_stack_ = nullptr;
-    QTreeView* connection_tree_ = nullptr;
-    QTableView* result_grid_ = nullptr;
-    QTableView* structure_grid_ = nullptr;
+    ConnectionSidebarWidget* sidebar_ = nullptr;
     QLabel* status_label_ = nullptr;
-    QLabel* result_status_label_ = nullptr;
     QWidget* top_left_corner_hint_ = nullptr;
     QWidget* top_right_corner_hint_ = nullptr;
     QWidget* bottom_left_corner_hint_ = nullptr;
     QWidget* bottom_right_corner_hint_ = nullptr;
-    QToolButton* prev_button_ = nullptr;
-    QToolButton* next_button_ = nullptr;
     QStandardItemModel* connection_model_ = nullptr;
-    QStandardItemModel* result_model_ = nullptr;
-    QStandardItemModel* structure_model_ = nullptr;
-    QStandardItemModel* foreign_key_model_ = nullptr;
-    QStandardItemModel* index_model_ = nullptr;
-    QLineEdit* sort_column_input_ = nullptr;
-    QCheckBox* sort_direction_toggle_ = nullptr;
     QString current_connection_id_;
     QString current_connection_driver_;
     QString connected_connection_id_;
@@ -143,5 +123,5 @@ private:
     quint64 current_table_page_size_ = 100;
     Qt::Edges active_resize_edges_ = Qt::Edges();
     QWidget* resize_cursor_widget_ = nullptr;
-    std::vector<QueryTabState> query_tab_states_;
+    std::vector<lith_models::QueryTabState> query_tab_states_;
 };

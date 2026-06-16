@@ -43,10 +43,48 @@ set(
 qt_add_executable(lithedb-qt
     WIN32
     MACOSX_BUNDLE
+    src/bridge_utils.cpp
+    src/bridge_utils.h
+    src/components/query/query_editor_tab_widget.cpp
+    src/components/query/query_editor_tab_widget.h
+    src/components/query/query_result_widget.cpp
+    src/components/query/query_result_widget.h
+    src/components/sidebar/connection_sidebar_widget.cpp
+    src/components/sidebar/connection_sidebar_widget.h
+    src/components/table/table_data_widget.cpp
+    src/components/table/table_data_widget.h
+    src/components/table/table_page_widget.cpp
+    src/components/table/table_page_widget.h
+    src/components/table/table_structure_widget.cpp
+    src/components/table/table_structure_widget.h
+    src/connection_dialog.cpp
+    src/connection_dialog.h
+    src/dialogs/about_dialog.cpp
+    src/dialogs/about_dialog.h
+    src/dialogs/preferences_dialog.cpp
+    src/dialogs/preferences_dialog.h
+    src/dialogs/shortcuts_dialog.cpp
+    src/dialogs/shortcuts_dialog.h
     src/main.cpp
+    src/mainwindow/mainwindow_chrome.cpp
+    src/mainwindow/mainwindow_connections.cpp
+    src/mainwindow/mainwindow_query.cpp
+    src/mainwindow/mainwindow_shared.cpp
+    src/mainwindow/mainwindow_shared.h
+    src/mainwindow/mainwindow_table.cpp
     src/mainwindow.cpp
     src/mainwindow.h
+    src/models/connection_tree_roles.h
+    src/models/query_tab_state.h
+    src/row_editor_dialog.cpp
+    src/row_editor_dialog.h
     src/resources.qrc
+    src/table_model_utils.cpp
+    src/table_model_utils.h
+    src/theme.cpp
+    src/theme.h
+    src/ui_helpers.cpp
+    src/ui_helpers.h
 )
 
 target_link_libraries(lithedb-qt PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)

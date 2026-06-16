@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "theme.h"
 
 #include <QApplication>
 #include <QFile>
@@ -35,7 +36,7 @@ int main(int argc, char* argv[])
     app.setProperty("lithedbSystemPrefersDark", systemPrefersDark);
 
     load_stylesheet(app);
-    initialize_application_theme(app);
+    lith_theme::initialize_application_theme(app);
 
     MainWindow window;
     window.show();
