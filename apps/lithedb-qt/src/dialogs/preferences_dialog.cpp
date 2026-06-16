@@ -45,6 +45,22 @@ PreferencesDialog::PreferencesDialog(QWidget* parent)
     force_light_->setChecked(currentMode == lith_theme::ThemeMode::ForceLight);
     force_dark_->setChecked(currentMode == lith_theme::ThemeMode::ForceDark);
 
+    connect(follow_system_, &QRadioButton::toggled, this, [this](bool checked) {
+        if (checked) {
+            emit theme_mode_changed(lith_theme::ThemeMode::FollowSystem);
+        }
+    });
+    connect(force_light_, &QRadioButton::toggled, this, [this](bool checked) {
+        if (checked) {
+            emit theme_mode_changed(lith_theme::ThemeMode::ForceLight);
+        }
+    });
+    connect(force_dark_, &QRadioButton::toggled, this, [this](bool checked) {
+        if (checked) {
+            emit theme_mode_changed(lith_theme::ThemeMode::ForceDark);
+        }
+    });
+
     cardLayout->addWidget(follow_system_);
     cardLayout->addWidget(force_light_);
     cardLayout->addWidget(force_dark_);

@@ -16,6 +16,9 @@ public:
     explicit PreferencesDialog(QWidget* parent = nullptr);
     lith_theme::ThemeMode selected_theme_mode() const;
 
+signals:
+    void theme_mode_changed(lith_theme::ThemeMode mode);
+
 private:
     QRadioButton* follow_system_ = nullptr;
     QRadioButton* force_light_ = nullptr;

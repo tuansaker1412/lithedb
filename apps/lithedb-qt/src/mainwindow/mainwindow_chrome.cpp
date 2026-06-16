@@ -564,11 +564,7 @@ void MainWindow::refresh_schema()
 void MainWindow::show_preferences_dialog()
 {
     PreferencesDialog dialog(this);
-    connect(&dialog, &QDialog::finished, this, [this, &dialog](int result) {
-        if (result != QDialog::Accepted && result != QDialog::Rejected) {
-            return;
-        }
-        const auto mode = dialog.selected_theme_mode();
+    connect(&dialog, &PreferencesDialog::theme_mode_changed, this, [this](lith_theme::ThemeMode mode) {
         lith_theme::apply_theme_mode(mode);
         status_label_->setText(
             mode == lith_theme::ThemeMode::FollowSystem
