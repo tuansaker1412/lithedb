@@ -222,6 +222,8 @@ jobs:
   macos:
     name: Build macOS DMG
     runs-on: macos-15-intel
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
 
     steps:
       - name: Checkout
@@ -241,7 +243,7 @@ jobs:
         run: cargo build -p lithedb-bridge --release --locked
 
       - name: Configure Qt build
-        run: cmake -S apps/lithedb-qt -B build-qt -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+        run: cmake -S apps/lithedb-qt -B build-qt -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 
       - name: Build Qt app
         run: cmake --build build-qt --config Release
