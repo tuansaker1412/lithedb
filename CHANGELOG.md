@@ -4,6 +4,13 @@ All notable changes to this project should be documented in this file.
 
 The format is intentionally lightweight and release-oriented.
 
+## [1.0.2] - 2026-06-28
+
+### Changed
+
+- Updated release metadata across Cargo, Qt CMake, packaging files, README, and release guidance to `1.0.2`
+- Prepared the repository for the `v1.0.2` production release tag
+
 ## [1.0.1] - 2026-06-16
 
 ### Changed

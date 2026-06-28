@@ -6,7 +6,7 @@
 
 LitheDB is a cross-platform desktop database client built with a shared Rust core and a production Qt6 Widgets frontend.
 
-`v1.0.1` is the current multi-platform production release. The Qt app under `apps/lithedb-qt/` is now the maintained desktop frontend for Linux, macOS, and Windows. The older GTK frontend under `src/` remains in the repository as a legacy reference and fallback code path, but it is no longer the release target and will not receive feature work.
+`v1.0.2` is the current multi-platform production release. The Qt app under `apps/lithedb-qt/` is now the maintained desktop frontend for Linux, macOS, and Windows. The older GTK frontend under `src/` remains in the repository as a legacy reference and fallback code path, but it is no longer the release target and will not receive feature work.
 
 ## Features
 
@@ -31,7 +31,7 @@ Production releases are published from GitHub Releases and should include:
 - macOS `.dmg`
 - `SHA256SUMS`
 
-Flatpak and the GTK/Linux packaging flow remain in the repository as legacy material and are not part of the official `v1.0.1` production release line.
+Flatpak and the GTK/Linux packaging flow remain in the repository as legacy material and are not part of the official `v1.0.2` production release line.
 
 ## Install
 
@@ -135,8 +135,8 @@ cmake --build build-qt --config Release
 3. Create and push a tag:
 
 ```bash
-git tag -a v1.0.1 -m "Release v1.0.1"
-git push origin v1.0.1
+git tag -a v1.0.2 -m "Release v1.0.2"
+git push origin v1.0.2
 ```
 
 GitHub Actions will then:

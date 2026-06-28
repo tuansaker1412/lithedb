@@ -3,7 +3,7 @@ members = ["crates/lithedb-core", "crates/lithedb-bridge"]
 
 [package]
 name = "lithedb"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "Legacy GTK frontend and workspace metadata for LitheDB"
 license = "MIT"
