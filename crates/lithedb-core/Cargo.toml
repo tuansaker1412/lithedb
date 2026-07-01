@@ -8,7 +8,7 @@ license = "MIT"
 [dependencies]
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time"] }
-sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio-native-tls", "postgres", "mysql", "sqlite", "chrono"] }
+sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio-native-tls", "postgres", "mysql", "sqlite", "chrono", "uuid", "bigdecimal", "json", "ipnetwork", "mac_address"] }
 libsqlite3-sys = { version = "0.27", features = ["bundled"] }
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }

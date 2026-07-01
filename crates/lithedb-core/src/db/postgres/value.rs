@@ -45,6 +45,49 @@ impl PostgresDriver {
                 .ok()
                 .flatten()
                 .map(|v| v.to_string()),
+            "UUID" => row
+                .try_get::<Option<sqlx::types::Uuid>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "NUMERIC" => row
+                .try_get::<Option<sqlx::types::BigDecimal>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "JSON" | "JSONB" => row
+                .try_get::<Option<sqlx::types::JsonValue>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "INET" | "CIDR" => row
+                .try_get::<Option<sqlx::types::ipnetwork::IpNetwork>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "MACADDR" => row
+                .try_get::<Option<sqlx::types::mac_address::MacAddress>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.to_string()),
+            "MONEY" => row
+                .try_get::<Option<sqlx::postgres::types::PgMoney>, _>(idx)
+                .ok()
+                .flatten()
+                .map(|v| v.0.to_string()),
+            "INTERVAL" => row
+                .try_get::<Option<sqlx::postgres::types::PgInterval>, _>(idx)
+                .ok()
+                .flatten()
+                .map(Self::pg_interval_to_string),
+            "TIMETZ" => row
+                .try_get::<
+                    Option<sqlx::postgres::types::PgTimeTz<chrono::NaiveTime, chrono::FixedOffset>>,
+                    _,
+                >(idx)
+                .ok()
+                .flatten()
+                .map(|v| format!("{}{}", v.time, v.offset)),
             "BYTEA" => row
                 .try_get::<Option<Vec<u8>>, _>(idx)
                 .ok()
@@ -70,10 +113,7 @@ impl PostgresDriver {
                 .ok()
                 .flatten()
                 .map(|v| v.to_rfc3339()),
-            "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CHAR" | "CITEXT" | "UUID" | "INET"
-            | "CIDR" | "MACADDR" | "MACADDR8" | "JSON" | "JSONB" | "XML" | "TIMETZ"
-            | "INTERVAL" | "NUMERIC" | "MONEY" | "POINT" | "LINE" | "LSEG" | "BOX" | "PATH"
-            | "POLYGON" | "CIRCLE" | "TSVECTOR" | "TSQUERY" => {
+            "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" | "CHAR" | "CITEXT" => {
                 row.try_get::<Option<String>, _>(idx).ok().flatten()
             }
             _ => row
@@ -85,7 +125,47 @@ impl PostgresDriver {
                         .ok()
                         .flatten()
                         .map(|v| v.to_string())
+                })
+                .or_else(|| {
+                    row.try_get::<Option<f64>, _>(idx)
+                        .ok()
+                        .flatten()
+                        .map(|v| v.to_string())
                 }),
         }
+    }
+
+    fn pg_interval_to_string(interval: sqlx::postgres::types::PgInterval) -> String {
+        let years = interval.months / 12;
+        let mons = interval.months % 12;
+        let total_seconds = interval.microseconds / 1_000_000;
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let seconds = total_seconds % 60;
+        let micros = interval.microseconds % 1_000_000;
+
+        let mut parts: Vec<String> = Vec::new();
+        if years != 0 {
+            parts.push(format!("{} years", years));
+        }
+        if mons != 0 {
+            parts.push(format!("{} mons", mons));
+        }
+        if interval.days != 0 {
+            parts.push(format!("{} days", interval.days));
+        }
+        let has_time =
+            hours != 0 || minutes != 0 || seconds != 0 || micros != 0 || parts.is_empty();
+        if has_time {
+            if micros != 0 {
+                parts.push(format!(
+                    "{:02}:{:02}:{:02}.{:06}",
+                    hours, minutes, seconds, micros
+                ));
+            } else {
+                parts.push(format!("{:02}:{:02}:{:02}", hours, minutes, seconds));
+            }
+        }
+        parts.join(" ")
     }
 }
