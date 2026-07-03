@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336"
+    },
+    "qt6-desktop-ux": {
+      "source": "bartoszwarzocha/kalahari",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/qt6-desktop-ux/SKILL.md",
+      "computedHash": "8b71ad1af601c9de771b06520be92746ea9ccc8a3317d962e003b8daa3ce5421"
+    }
+  }
+}
