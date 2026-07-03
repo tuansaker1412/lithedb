@@ -103,5 +103,19 @@ fn run() -> Result<(), String> {
             table,
             keys_json,
         )?),
+        Command::DropDatabase {
+            connection_id,
+            database_name,
+        } => print_json(&commands::database::drop_database(
+            connection_id,
+            database_name,
+        )?),
+        Command::CreateDatabase {
+            connection_id,
+            database_name,
+        } => print_json(&commands::database::create_database(
+            connection_id,
+            database_name,
+        )?),
     }
 }

@@ -365,6 +365,14 @@ void MainWindow::build_toolbar()
 
     auto* manageConnectionsAction = new QAction("Manage Connections", this);
     addAction(manageConnectionsAction);
+    auto* newDatabaseAction = new QAction("New Database...", this);
+    newDatabaseAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
+    newDatabaseAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(newDatabaseAction);
+    auto* dropDatabaseAction = new QAction("Drop Database...", this);
+    dropDatabaseAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
+    dropDatabaseAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(dropDatabaseAction);
 
     auto* refreshSchemaAction = new QAction("Refresh Schema", this);
     refreshSchemaAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
@@ -405,6 +413,10 @@ void MainWindow::build_toolbar()
     fileMenu->addSeparator();
     fileMenu->addAction(quitAction);
 
+    auto* databaseMenu = menuBar()->addMenu("&Database");
+    databaseMenu->addAction(newDatabaseAction);
+    databaseMenu->addAction(dropDatabaseAction);
+
     auto* viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction(refreshSchemaAction);
     viewMenu->addAction(reloadTableAction);
@@ -416,6 +428,8 @@ void MainWindow::build_toolbar()
     helpMenu->addAction(aboutAction);
 
     connect(newConnectionAction, &QAction::triggered, this, [this]() { open_connection_dialog(); });
+    connect(newDatabaseAction, &QAction::triggered, this, [this]() { create_database_dialog(); });
+    connect(dropDatabaseAction, &QAction::triggered, this, [this]() { drop_database_dialog(); });
     connect(manageConnectionsAction, &QAction::triggered, this, [this]() {
         const auto* selected = selected_connection_item();
         if (selected) {
@@ -441,6 +455,8 @@ void MainWindow::build_toolbar()
 
     auto* headerMenu = new QMenu(this);
     headerMenu->addAction(newConnectionAction);
+    headerMenu->addAction(newDatabaseAction);
+    headerMenu->addAction(dropDatabaseAction);
     headerMenu->addAction(manageConnectionsAction);
     headerMenu->addSeparator();
     headerMenu->addAction(refreshSchemaAction);

@@ -485,6 +485,32 @@ impl DatabaseDriver for MySqlDriver {
         *self.config.lock().await = Some(new_cfg);
         Ok(())
     }
+    async fn create_database(&self, name: &str) -> Result<(), String> {
+        if name.trim().is_empty() {
+            return Err("database name cannot be empty".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let quoted = Self::quote_ident(name.trim());
+        let sql = format!("CREATE DATABASE {}", quoted);
+        sqlx::query(&sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    async fn drop_database(&self, name: &str) -> Result<(), String> {
+        if name.trim().is_empty() {
+            return Err("database name cannot be empty".to_string());
+        }
+        let pool = self.get_pool().await?;
+        let quoted = Self::quote_ident(name.trim());
+        let sql = format!("DROP DATABASE {}", quoted);
+        sqlx::query(&sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

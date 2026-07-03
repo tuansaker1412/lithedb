@@ -49,6 +49,14 @@ pub enum Command<'a> {
         table: &'a str,
         keys_json: &'a str,
     },
+    CreateDatabase {
+        connection_id: &'a str,
+        database_name: &'a str,
+    },
+    DropDatabase {
+        connection_id: &'a str,
+        database_name: &'a str,
+    },
 }
 
 pub fn parse_command(args: &[String]) -> Result<Command<'_>, String> {
@@ -156,6 +164,22 @@ pub fn parse_command(args: &[String]) -> Result<Command<'_>, String> {
             database: args.get(3).ok_or_else(|| "missing database".to_string())?,
             table: args.get(4).ok_or_else(|| "missing table".to_string())?,
             keys_json: args.get(5).ok_or_else(|| "missing keys json".to_string())?,
+        }),
+        "create-database" => Ok(Command::CreateDatabase {
+            connection_id: args
+                .get(2)
+                .ok_or_else(|| "missing connection id".to_string())?,
+            database_name: args
+                .get(3)
+                .ok_or_else(|| "missing database name".to_string())?,
+        }),
+        "drop-database" => Ok(Command::DropDatabase {
+            connection_id: args
+                .get(2)
+                .ok_or_else(|| "missing connection id".to_string())?,
+            database_name: args
+                .get(3)
+                .ok_or_else(|| "missing database name".to_string())?,
         }),
         _ => Err(format!("unknown command: {command}")),
     }

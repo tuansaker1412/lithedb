@@ -12,6 +12,10 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QTreeView>
+#include <QMenu>
+#include <QAction>
+#include <QModelIndex>
+#include <QStandardItem>
 #include <QVBoxLayout>
 
 ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
@@ -94,6 +98,7 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     connection_tree_->setAlternatingRowColors(false);
     connection_tree_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connection_tree_->setObjectName("connectionTree");
+    connection_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
     connection_model_ = new QStandardItemModel(this);
     connection_tree_->setModel(connection_model_);
 
@@ -122,6 +127,7 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     connect(delete_button_, &QToolButton::clicked, this, &ConnectionSidebarWidget::deleteConnectionRequested);
     connect(connect_button_, &QPushButton::clicked, this, &ConnectionSidebarWidget::connectRequested);
     connect(disconnect_button_, &QPushButton::clicked, this, &ConnectionSidebarWidget::disconnectRequested);
+    connect(connection_tree_, &QTreeView::customContextMenuRequested, this, &ConnectionSidebarWidget::show_context_menu);
 
     set_connection_actions_enabled(false, false);
     set_view_mode(ViewMode::Loading);
@@ -200,5 +206,59 @@ void ConnectionSidebarWidget::apply_schema_filter(const QString& text)
         if (connHasMatch) {
             tree->expand(conn->index());
         }
+    }
+}
+
+void ConnectionSidebarWidget::show_context_menu(const QPoint& pos)
+{
+    if (!connection_model_) {
+        return;
+    }
+    auto index = connection_tree_->indexAt(pos);
+    if (!index.isValid()) {
+        return;
+    }
+
+    auto* item = connection_model_->itemFromIndex(index);
+    if (!item) {
+        return;
+    }
+
+    // Walk up to find the item and its kind
+    auto* targetItem = item;
+    QString kind = targetItem->data(Qt::UserRole + 1).toString();
+
+    // For table items, walk up to find database parent
+    auto* walkItem = item;
+    while (walkItem && walkItem->data(Qt::UserRole + 1).toString() != "database" && walkItem->parent()) {
+        walkItem = walkItem->parent();
+    }
+
+    QMenu menu(this);
+
+    if (kind == "connection") {
+        auto connectionId = targetItem->data(Qt::UserRole + 2).toString();
+        auto* newDbAction = menu.addAction("New Database...");
+        connect(newDbAction, &QAction::triggered, this, [this, connectionId]() {
+            emit createDatabaseRequested(connectionId);
+        });
+    } else if (kind == "database") {
+        auto connectionId = targetItem->data(Qt::UserRole + 2).toString();
+        auto databaseName = targetItem->data(Qt::UserRole + 3).toString();
+        auto* dropDbAction = menu.addAction("Drop Database...");
+        connect(dropDbAction, &QAction::triggered, this, [this, connectionId, databaseName]() {
+            emit dropDatabaseRequested(connectionId, databaseName);
+        });
+    } else if (kind == "table" && walkItem && walkItem->data(Qt::UserRole + 1).toString() == "database") {
+        auto connectionId = walkItem->data(Qt::UserRole + 2).toString();
+        auto databaseName = walkItem->data(Qt::UserRole + 3).toString();
+        auto* dropDbAction = menu.addAction("Drop Database...");
+        connect(dropDbAction, &QAction::triggered, this, [this, connectionId, databaseName]() {
+            emit dropDatabaseRequested(connectionId, databaseName);
+        });
+    }
+
+    if (!menu.isEmpty()) {
+        menu.exec(connection_tree_->viewport()->mapToGlobal(pos));
     }
 }

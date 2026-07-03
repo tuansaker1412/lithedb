@@ -58,6 +58,8 @@ private:
     void disconnect_active_connection();
     void open_connection_dialog(const QString& connectionId = QString());
     void delete_selected_connection();
+    void create_database_dialog(const QString& connectionId = QString());
+    void drop_database_dialog(const QString& connectionId = QString(), const QString& databaseName = QString());
     void load_schema_for_connection(const QString& connectionId);
     void execute_query_for_page(QWidget* page);
     void copy_query_result_cell(QueryResultWidget* widget);

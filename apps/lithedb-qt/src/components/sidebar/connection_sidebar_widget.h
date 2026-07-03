@@ -28,6 +28,7 @@ public:
     void set_view_mode(ViewMode mode);
     void set_connection_actions_enabled(bool hasSelection, bool isActive);
     void apply_schema_filter(const QString& text);
+    void show_context_menu(const QPoint& pos);
 
 signals:
     void refreshSchemaRequested();
@@ -36,6 +37,8 @@ signals:
     void deleteConnectionRequested();
     void connectRequested();
     void disconnectRequested();
+    void createDatabaseRequested(const QString& connectionId);
+    void dropDatabaseRequested(const QString& connectionId, const QString& databaseName);
 
 private:
     QToolButton* refresh_button_ = nullptr;

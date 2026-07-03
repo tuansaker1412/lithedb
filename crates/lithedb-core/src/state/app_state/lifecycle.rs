@@ -141,3 +141,27 @@ impl AppState {
             .map(|c| c.database.clone())
     }
 }
+
+impl AppState {
+    pub async fn create_database(&self, name: &str) -> Result<(), String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let db_name = name.to_string();
+        spawn_tokio(async move { driver.create_database(&db_name).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+}
+
+impl AppState {
+    pub async fn drop_database(&self, name: &str) -> Result<(), String> {
+        let (driver, _) = self
+            .active_driver()
+            .ok_or_else(|| "not connected".to_string())?;
+        let db_name = name.to_string();
+        spawn_tokio(async move { driver.drop_database(&db_name).await })
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    }
+}

@@ -122,4 +122,6 @@ pub trait DatabaseDriver: Send + Sync {
         keys: &[CellValue],
     ) -> Result<u64, String>;
     async fn delete_row(&self, table: &str, keys: &[CellValue]) -> Result<u64, String>;
+    async fn create_database(&self, name: &str) -> Result<(), String>;
+    async fn drop_database(&self, name: &str) -> Result<(), String>;
 }

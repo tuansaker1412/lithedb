@@ -386,6 +386,18 @@ impl DatabaseDriver for SqliteDriver {
     async fn use_database(&self, _database: &str) -> Result<(), String> {
         Ok(())
     }
+    async fn create_database(&self, _name: &str) -> Result<(), String> {
+        Err(
+            "SQLite databases are file-based. Use 'Add Connection' to create a new database file."
+                .to_string(),
+        )
+    }
+    async fn drop_database(&self, _name: &str) -> Result<(), String> {
+        Err(
+            "SQLite databases are file-based. Use 'Delete Connection' to remove a database file."
+                .to_string(),
+        )
+    }
 }
 
 #[cfg(test)]

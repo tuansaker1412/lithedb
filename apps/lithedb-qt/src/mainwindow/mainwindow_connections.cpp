@@ -1,4 +1,6 @@
 #include "../mainwindow.h"
+#include "../dialogs/create_database_dialog.h"
+#include "../dialogs/drop_database_dialog.h"
 
 #include "../components/sidebar/connection_sidebar_widget.h"
 #include "../components/query/query_editor_tab_widget.h"
@@ -68,6 +70,12 @@ void MainWindow::seed_sidebar()
     connect(sidebar_, &ConnectionSidebarWidget::deleteConnectionRequested, this, [this]() { delete_selected_connection(); });
     connect(sidebar_, &ConnectionSidebarWidget::connectRequested, this, [this]() { connect_selected_connection(); });
     connect(sidebar_, &ConnectionSidebarWidget::disconnectRequested, this, [this]() { disconnect_active_connection(); });
+    connect(sidebar_, &ConnectionSidebarWidget::createDatabaseRequested, this, [this](const QString& connectionId) {
+        create_database_dialog(connectionId);
+    });
+    connect(sidebar_, &ConnectionSidebarWidget::dropDatabaseRequested, this, [this](const QString& connectionId, const QString& databaseName) {
+        drop_database_dialog(connectionId, databaseName);
+    });
     refresh_connection_buttons();
 }
 
@@ -512,4 +520,133 @@ void MainWindow::load_schema_for_connection(const QString& connectionId)
     });
     timeoutTimer->start(ConnectTimeoutMs);
     schemaProcess->start(bridge_binary_path(), QStringList{"list-schema", connectionId});
+}
+
+void MainWindow::create_database_dialog(const QString& connectionId)
+{
+    if (connected_connection_id_.isEmpty()) {
+        QMessageBox::information(this, "No Active Connection",
+            "Please connect to a database server first.");
+        return;
+    }
+
+    auto* conn_item = selected_connection_item();
+    if (!conn_item) {
+        return;
+    }
+
+    // If connectionId is provided and matches the connected connection, use it
+    QString targetConnectionId = connected_connection_id_;
+    if (!connectionId.isEmpty() && connectionId == connected_connection_id_) {
+        targetConnectionId = connectionId;
+    }
+
+    QString driver = conn_item->data(RoleDriver).toString();
+    if (driver == "SQLite") {
+        QMessageBox::information(this, "SQLite Not Supported",
+            "SQLite databases are file-based.\nUse 'Add Connection' to create a new database file.");
+        return;
+    }
+
+    QString conn_name = conn_item->data(RoleBaseName).toString();
+
+    CreateDatabaseDialog dialog(this);
+    dialog.set_connection_info(conn_name, driver);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        QString db_name = dialog.database_name();
+        auto* process = new QProcess(this);
+        connect(process, &QProcess::finished, this, [this, process, db_name](int exitCode) {
+            if (exitCode == 0) {
+                status_label_->setText(QString("Database '%1' created successfully").arg(db_name));
+                refresh_schema();
+            } else {
+                QString error = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
+                QMessageBox::warning(this, "Create Database Failed",
+                    error.isEmpty() ? "Failed to create database." : error);
+            }
+            process->deleteLater();
+        });
+        process->start(bridge_binary_path(), {
+            "create-database",
+            targetConnectionId,
+            db_name
+        });
+    }
+}
+
+
+void MainWindow::drop_database_dialog(const QString& connectionId, const QString& databaseName)
+{
+    if (connected_connection_id_.isEmpty()) {
+        QMessageBox::information(this, "No Active Connection",
+            "Please connect to a database server first.");
+        return;
+    }
+
+    auto* conn_item = selected_connection_item();
+    if (!conn_item) {
+        return;
+    }
+
+    QString driver = conn_item->data(RoleDriver).toString();
+    if (driver == "SQLite") {
+        QMessageBox::information(this, "SQLite Not Supported",
+            "SQLite databases are file-based.\nUse 'Delete Connection' to remove a database file.");
+        return;
+    }
+
+    // Determine which database to drop: use provided databaseName, or sidebar selection, or current_database_
+    QString targetDb = databaseName;
+    if (targetDb.isEmpty()) {
+        auto* selectedItem = connection_model_->itemFromIndex(sidebar_->tree_view()->currentIndex());
+        if (selectedItem) {
+            auto* walkItem = selectedItem;
+            while (walkItem && walkItem->data(RoleKind).toString() != "database" && walkItem->parent()) {
+                walkItem = walkItem->parent();
+            }
+            if (walkItem && walkItem->data(RoleKind).toString() == "database") {
+                targetDb = walkItem->data(RoleDatabase).toString();
+            }
+        }
+    }
+    if (targetDb.isEmpty()) {
+        targetDb = current_database_;
+    }
+    if (targetDb.isEmpty()) {
+        QMessageBox::information(this, "No Database Selected",
+            "Please select a database in the sidebar to drop.");
+        return;
+    }
+
+    // Use provided connectionId if valid, otherwise use connected_connection_id_
+    QString targetConnectionId = connected_connection_id_;
+    if (!connectionId.isEmpty() && connectionId == connected_connection_id_) {
+        targetConnectionId = connectionId;
+    }
+
+    QString conn_name = conn_item->data(RoleBaseName).toString();
+
+    DropDatabaseDialog dialog(this);
+    dialog.set_database_info(targetDb, conn_name, driver);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        auto* process = new QProcess(this);
+        connect(process, &QProcess::finished, this, [this, process, targetDb](int exitCode) {
+            if (exitCode == 0) {
+                status_label_->setText(QString("Database '%1' dropped successfully").arg(targetDb));
+                refresh_schema();
+            } else {
+                QString error = QString::fromLocal8Bit(process->readAllStandardError()).trimmed();
+                QMessageBox::warning(this, "Drop Database Failed",
+                    error.isEmpty() ? "Failed to drop database." : error);
+            }
+            process->deleteLater();
+        });
+        process->start(bridge_binary_path(), {
+            "drop-database",
+            targetConnectionId,
+            targetDb
+        });
+    }
 }

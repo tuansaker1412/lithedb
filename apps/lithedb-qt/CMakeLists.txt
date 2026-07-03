@@ -65,6 +65,10 @@ qt_add_executable(lithedb-qt
     src/dialogs/preferences_dialog.h
     src/dialogs/shortcuts_dialog.cpp
     src/dialogs/shortcuts_dialog.h
+    src/dialogs/create_database_dialog.cpp
+    src/dialogs/create_database_dialog.h
+    src/dialogs/drop_database_dialog.cpp
+    src/dialogs/drop_database_dialog.h
     src/main.cpp
     src/mainwindow/mainwindow_chrome.cpp
     src/mainwindow/mainwindow_connections.cpp
