@@ -3,6 +3,7 @@
 #include "../ui_helpers.h"
 
 #include <QDialogButtonBox>
+#include <QGridLayout>
 #include <QLabel>
 #include <QVBoxLayout>
 
@@ -23,21 +24,32 @@ ShortcutsDialog::ShortcutsDialog(QWidget* parent)
 
     QVBoxLayout* cardLayout = nullptr;
     auto* card = lith_ui::create_dialog_card(this, cardLayout);
-    const QStringList shortcuts = {
-        "Ctrl+T: New query tab",
-        "Ctrl+W: Close query tab",
-        "Ctrl+Enter: Run query",
-        "Ctrl+R: Refresh schema",
-        "Ctrl+Shift+C: New connection",
-        "F5: Reload table data",
-        "F1: Show shortcuts",
+    cardLayout->setSpacing(2);
+
+    const struct { const char* key; const char* label; } shortcuts[] = {
+        {"Ctrl+T", "New query tab"},
+        {"Ctrl+W", "Close query tab"},
+        {"Ctrl+Enter", "Run query"},
+        {"Ctrl+R", "Refresh schema"},
+        {"Ctrl+Shift+C", "New connection"},
+        {"F5", "Reload table data"},
+        {"F1", "Show this list"},
     };
-    for (const auto& line : shortcuts) {
-        auto* label = new QLabel(line, this);
-        label->setObjectName("sectionTitle");
-        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        cardLayout->addWidget(label);
+
+    auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(24);
+    grid->setVerticalSpacing(8);
+    grid->setColumnStretch(1, 1);
+    for (const auto& entry : shortcuts) {
+        auto* key = new QLabel(QString::fromLatin1(entry.key), card);
+        key->setObjectName("shortcutKey");
+        auto* desc = new QLabel(QString::fromLatin1(entry.label), card);
+        desc->setObjectName("dimCaption");
+        const int row = grid->rowCount();
+        grid->addWidget(key, row, 0, Qt::AlignLeft);
+        grid->addWidget(desc, row, 1);
     }
+    cardLayout->addLayout(grid);
     layout->addWidget(card);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);

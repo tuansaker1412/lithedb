@@ -340,7 +340,6 @@ QLabel#placeholderTitle {
 
 QLabel#placeholderDescription {
     color: __LITHEDB_TEXT_SUBTLE__;
-    max-width: 420px;
 }
 
 QComboBox::drop-down {
@@ -408,7 +407,6 @@ QLabel#aboutAppTitle {
 QLabel#aboutSubtitle {
     color: __LITHEDB_TEXT_SECONDARY__;
     font-size: 14px;
-    max-width: 360px;
 }
 
 QLabel#aboutVersionBadge {
@@ -455,6 +453,17 @@ QLabel#fieldCaption {
 
 QLabel#dimCaption {
     font-size: 12px;
+}
+
+QLabel#shortcutKey {
+    font-family: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: __LITHEDB_TEXT_STRONG__;
+    background: __LITHEDB_SURFACE_ALT_BG__;
+    border: 1px solid __LITHEDB_BORDER_SUBTLE__;
+    border-radius: 6px;
+    padding: 3px 8px;
 }
 
 QLabel[statusTone="error"] {

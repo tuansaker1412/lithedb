@@ -96,7 +96,7 @@ QWidget* make_loading_state(const QString& title, const QString& description)
     titleLabel->setWordWrap(true);
     titleLabel->setAlignment(Qt::AlignHCenter);
     auto* descriptionLabel = new QLabel(description);
-    // descriptionLabel->setWordWrap(true);
+    descriptionLabel->setWordWrap(true);
     descriptionLabel->setObjectName("placeholderDescription");
     descriptionLabel->setAlignment(Qt::AlignHCenter);
     auto* progress = new QProgressBar;
@@ -108,7 +108,7 @@ QWidget* make_loading_state(const QString& title, const QString& description)
     layout->addStretch(1);
     layout->addWidget(progress, 0, Qt::AlignHCenter);
     layout->addWidget(titleLabel);
-    layout->addWidget(descriptionLabel, 0, Qt::AlignHCenter);
+    layout->addWidget(descriptionLabel);
     layout->addStretch(1);
 
     return page;
@@ -135,14 +135,14 @@ QWidget* make_empty_state(
     titleLabel->setWordWrap(true);
     titleLabel->setAlignment(Qt::AlignHCenter);
     auto* descriptionLabel = new QLabel(description);
-    // descriptionLabel->setWordWrap(true);
+    descriptionLabel->setWordWrap(true);
     descriptionLabel->setObjectName("placeholderDescription");
     descriptionLabel->setAlignment(Qt::AlignHCenter);
 
     layout->addStretch(1);
     layout->addWidget(iconLabel, 0, Qt::AlignHCenter);
     layout->addWidget(titleLabel);
-    layout->addWidget(descriptionLabel, 0, Qt::AlignHCenter);
+    layout->addWidget(descriptionLabel);
     layout->addStretch(1);
 
     return page;
@@ -247,70 +247,6 @@ QWidget* make_toolbar_separator()
     return line;
 }
 
-QWidget* make_query_page()
-{
-    auto* page = new QWidget;
-    auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(12);
-
-    auto* toolbar = new QWidget;
-    auto* toolbarLayout = new QHBoxLayout(toolbar);
-    toolbarLayout->setContentsMargins(12, 10, 12, 10);
-    toolbarLayout->setSpacing(8);
-    toolbar->setObjectName("panelToolbar");
-
-    auto* runButton = make_pill_button(
-        "Run (Ctrl+Enter)",
-        "media-playback-start-symbolic",
-        QStyle::SP_MediaPlay,
-        "accentPillButton",
-        "Run query"
-    );
-    auto* connectionLabel = new QLabel("Connection");
-    connectionLabel->setObjectName("fieldCaption");
-    auto* connection = new QComboBox;
-    connection->setObjectName("connectionCombo");
-    connection->setMinimumWidth(170);
-    auto* databaseLabel = new QLabel("Database");
-    databaseLabel->setObjectName("fieldCaption");
-    auto* database = new QComboBox;
-    database->setObjectName("databaseCombo");
-    database->setMinimumWidth(150);
-    database->setEnabled(false);
-    auto* status = new QLabel("Ready to run");
-    status->setObjectName("dimCaption");
-    status->setProperty("queryStatus", true);
-    status->setProperty("statusLabel", true);
-    auto* spinner = new QProgressBar;
-    spinner->setRange(0, 0);
-    spinner->setTextVisible(false);
-    spinner->setFixedWidth(88);
-    spinner->setObjectName("querySpinner");
-    spinner->hide();
-
-    toolbarLayout->addWidget(runButton);
-    toolbarLayout->addSpacing(4);
-    toolbarLayout->addWidget(connectionLabel);
-    toolbarLayout->addWidget(connection);
-    toolbarLayout->addWidget(databaseLabel);
-    toolbarLayout->addWidget(database);
-    toolbarLayout->addStretch(1);
-    toolbarLayout->addWidget(spinner);
-    toolbarLayout->addWidget(status);
-
-    auto* editor = new QPlainTextEdit;
-    editor->setPlaceholderText("Write SQL here");
-    editor->setObjectName("sqlEditor");
-    editor->setTabStopDistance(32);
-    runButton->setObjectName("queryRunButton");
-
-    layout->addWidget(toolbar);
-    layout->addWidget(editor, 1);
-
-    return page;
-}
-
 QWidget* make_placeholder_page(const QString& title, const QString& description)
 {
     auto* page = new QWidget;
@@ -323,13 +259,13 @@ QWidget* make_placeholder_page(const QString& title, const QString& description)
     titleLabel->setWordWrap(true);
     titleLabel->setAlignment(Qt::AlignHCenter);
     auto* descriptionLabel = new QLabel(description);
-    // descriptionLabel->setWordWrap(true);
+    descriptionLabel->setWordWrap(true);
     descriptionLabel->setObjectName("placeholderDescription");
     descriptionLabel->setAlignment(Qt::AlignHCenter);
 
     layout->addStretch(1);
     layout->addWidget(titleLabel);
-    layout->addWidget(descriptionLabel, 0, Qt::AlignHCenter);
+    layout->addWidget(descriptionLabel);
     layout->addStretch(1);
 
     return page;

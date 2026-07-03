@@ -25,7 +25,7 @@ PreferencesDialog::PreferencesDialog(QWidget* parent)
     layout->addWidget(titleLabel);
 
     auto* introLabel = new QLabel(
-        "Match the GTK frontend by choosing whether the Qt app should follow the system appearance or force a light or dark theme.",
+        "Choose whether LitheDB should follow the system appearance or stay in a light or dark theme.",
         this
     );
     introLabel->setObjectName("placeholderDescription");

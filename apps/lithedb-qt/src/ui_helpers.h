@@ -44,7 +44,6 @@ QWidget* make_sidebar_header(const QString& title);
 QWidget* make_panel_button_row();
 QWidget* make_link_row();
 QWidget* make_toolbar_separator();
-QWidget* make_query_page();
 QWidget* make_placeholder_page(const QString& title, const QString& description);
 
 } // namespace lith_ui

@@ -126,8 +126,9 @@ void MainWindow::execute_query_for_page(QWidget* page)
     const auto database = tab->database_combo()->currentText().trimmed();
     const auto sql = tab->editor()->toPlainText().trimmed();
     if (connectionId.isEmpty() || sql.isEmpty()) {
-        status_label_->setText(sql.isEmpty() ? "Enter SQL to run" : "Select a connection first");
-        tab->status_label()->setText(status_label_->text());
+        const auto message = sql.isEmpty() ? "Write a query to run" : "Pick a connection first";
+        status_label_->setText(message);
+        tab->status_label()->setText(message);
         return;
     }
     if (connected_connection_id_.isEmpty() || connectionId != connected_connection_id_) {
@@ -136,8 +137,8 @@ void MainWindow::execute_query_for_page(QWidget* page)
         return;
     }
     if (!tab->database_combo()->isEnabled() || database.isEmpty() || database == "Connect first" || database == "No databases loaded") {
-        status_label_->setText("Select a database first");
-        tab->status_label()->setText("Select a database first");
+        status_label_->setText("Pick a database first");
+        tab->status_label()->setText("Pick a database first");
         return;
     }
 
@@ -225,7 +226,7 @@ void MainWindow::execute_query_for_page(QWidget* page)
         resultPage->stack()->setCurrentIndex(model->rowCount() == 0 ? 1 : 2);
         resultPage->status_label()->setText(QString("%1 rows").arg(model->rowCount()));
         data_stack_->setCurrentIndex(1);
-        status_label_->setText(QString("Query loaded %1 rows").arg(model->rowCount()));
+        status_label_->setText(QString("Query returned %1 rows").arg(model->rowCount()));
         if (currentTab) {
             currentTab->status_label()->setText(QString("%1 rows").arg(model->rowCount()));
         }
@@ -241,7 +242,7 @@ void MainWindow::copy_query_result_cell(QueryResultWidget* widget)
         return;
     }
     QGuiApplication::clipboard()->setText(index.data().toString());
-    status_label_->setText("Query cell copied");
+    status_label_->setText("Cell copied to clipboard");
 }
 
 void MainWindow::copy_query_result_row_json(QueryResultWidget* widget)
@@ -256,7 +257,7 @@ void MainWindow::copy_query_result_row_json(QueryResultWidget* widget)
         object.insert(widget->model()->headerData(column, Qt::Horizontal).toString(), widget->model()->item(row, column)->text());
     }
     QGuiApplication::clipboard()->setText(QJsonDocument(object).toJson(QJsonDocument::Compact));
-    status_label_->setText("Query row JSON copied");
+    status_label_->setText("Row copied as JSON");
 }
 
 void MainWindow::copy_query_result_row_csv(QueryResultWidget* widget)
@@ -271,7 +272,7 @@ void MainWindow::copy_query_result_row_csv(QueryResultWidget* widget)
         values.append(widget->model()->item(row, column)->text());
     }
     QGuiApplication::clipboard()->setText(values.join(","));
-    status_label_->setText("Query row CSV copied");
+    status_label_->setText("Row copied as CSV");
 }
 
 void MainWindow::export_query_result_csv(QueryResultWidget* widget)
@@ -301,5 +302,5 @@ void MainWindow::export_query_result_csv(QueryResultWidget* widget)
         }
         stream << values.join(",") << "\n";
     }
-    status_label_->setText("Query CSV exported");
+    status_label_->setText("Exported query results as CSV");
 }

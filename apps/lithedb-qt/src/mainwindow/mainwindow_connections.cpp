@@ -42,14 +42,18 @@ void MainWindow::seed_sidebar()
         if (!item) {
             return;
         }
-        if (item->data(RoleKind).toString() != "table") {
+        if (item->data(RoleKind).toString() == "table") {
+            load_table_content(
+                item->data(RoleConnectionId).toString(),
+                item->data(RoleDatabase).toString(),
+                item->data(RoleTable).toString()
+            );
             return;
         }
-        load_table_content(
-            item->data(RoleConnectionId).toString(),
-            item->data(RoleDatabase).toString(),
-            item->data(RoleTable).toString()
-        );
+        if (item->data(RoleKind).toString() == "connection"
+            && item->data(RoleConnectionId).toString() != connected_connection_id_) {
+            connect_selected_connection();
+        }
     });
 
     connect(sidebar_, &ConnectionSidebarWidget::refreshSchemaRequested, this, [this]() { refresh_schema(); });
@@ -58,7 +62,7 @@ void MainWindow::seed_sidebar()
         if (const auto* item = selected_connection_item()) {
             open_connection_dialog(item->data(RoleConnectionId).toString());
         } else {
-            status_label_->setText("Select a connection first");
+            status_label_->setText("Select a connection to edit");
         }
     });
     connect(sidebar_, &ConnectionSidebarWidget::deleteConnectionRequested, this, [this]() { delete_selected_connection(); });
@@ -378,6 +382,7 @@ void MainWindow::disconnect_active_connection()
     sidebar_->tree_view()->collapseAll();
     refresh_query_database_dropdowns();
     refresh_connection_buttons();
+    setWindowTitle("LitheDB");
     status_label_->setText("Disconnected");
 }
 
@@ -501,7 +506,9 @@ void MainWindow::load_schema_for_connection(const QString& connectionId)
         connectionItem->setText(connectionItem->data(RoleBaseName).toString());
         lith_mainwindow::apply_connection_status_icon(connectionItem, true);
         refresh_connection_buttons();
-        status_label_->setText(QString("Connected to %1").arg(connectionItem->data(RoleBaseName).toString()));
+        const auto connectionName = connectionItem->data(RoleBaseName).toString();
+        setWindowTitle(QString("LitheDB — %1").arg(connectionName));
+        status_label_->setText(QString("Connected to %1").arg(connectionName));
     });
     timeoutTimer->start(ConnectTimeoutMs);
     schemaProcess->start(bridge_binary_path(), QStringList{"list-schema", connectionId});

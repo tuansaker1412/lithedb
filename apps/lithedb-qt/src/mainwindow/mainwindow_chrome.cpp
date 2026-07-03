@@ -494,8 +494,8 @@ void MainWindow::build_central_layout()
     data_tabs_->setUsesScrollButtons(true);
     data_stack_->addWidget(
         lith_ui::make_placeholder_page(
-            "No table opened",
-            "Click a table in the sidebar to open it in a new tab."
+            "Open a table to browse its data",
+            "Pick a table in the sidebar, or run a query above to see results here."
         )
     );
     data_stack_->addWidget(data_tabs_);

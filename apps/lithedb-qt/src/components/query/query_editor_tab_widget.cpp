@@ -25,11 +25,11 @@ QueryEditorTabWidget::QueryEditorTabWidget(QWidget* parent)
     toolbarLayout->setSpacing(8);
 
     run_button_ = lith_ui::make_pill_button(
-        "Run (Ctrl+Enter)",
+        "Run",
         "media-playback-start-symbolic",
         QStyle::SP_MediaPlay,
         "accentPillButton",
-        "Run query"
+        "Run query (Ctrl+Enter)"
     );
 
     auto* connectionLabel = new QLabel("Connection", toolbar);

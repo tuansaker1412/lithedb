@@ -5,6 +5,7 @@
 #include <QAbstractItemView>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QStandardItemModel>
@@ -82,6 +83,12 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     linkRowLayout->addWidget(connect_button_);
     linkRowLayout->addWidget(disconnect_button_);
 
+    filter_edit_ = new QLineEdit(this);
+    filter_edit_->setPlaceholderText("Filter tables...");
+    filter_edit_->setClearButtonEnabled(true);
+    filter_edit_->setObjectName("sidebarFilter");
+    filter_edit_->setVisible(false);
+
     connection_tree_ = new QTreeView(this);
     connection_tree_->setHeaderHidden(true);
     connection_tree_->setAlternatingRowColors(false);
@@ -105,9 +112,11 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     layout->addWidget(header);
     layout->addWidget(panelRow);
     layout->addWidget(linkRow);
+    layout->addWidget(filter_edit_);
     layout->addWidget(content_stack_, 1);
 
     connect(refresh_button_, &QToolButton::clicked, this, &ConnectionSidebarWidget::refreshSchemaRequested);
+    connect(filter_edit_, &QLineEdit::textChanged, this, &ConnectionSidebarWidget::apply_schema_filter);
     connect(add_button_, &QToolButton::clicked, this, &ConnectionSidebarWidget::addConnectionRequested);
     connect(edit_button_, &QToolButton::clicked, this, &ConnectionSidebarWidget::editConnectionRequested);
     connect(delete_button_, &QToolButton::clicked, this, &ConnectionSidebarWidget::deleteConnectionRequested);
@@ -131,6 +140,9 @@ QStandardItemModel* ConnectionSidebarWidget::model() const
 void ConnectionSidebarWidget::set_view_mode(ViewMode mode)
 {
     content_stack_->setCurrentIndex(static_cast<int>(mode));
+    if (filter_edit_) {
+        filter_edit_->setVisible(mode == ViewMode::Content);
+    }
 }
 
 void ConnectionSidebarWidget::set_connection_actions_enabled(bool hasSelection, bool isActive)
@@ -139,4 +151,54 @@ void ConnectionSidebarWidget::set_connection_actions_enabled(bool hasSelection, 
     delete_button_->setEnabled(hasSelection);
     connect_button_->setEnabled(hasSelection && !isActive);
     disconnect_button_->setEnabled(isActive);
+}
+
+void ConnectionSidebarWidget::apply_schema_filter(const QString& text)
+{
+    const auto needle = text.trimmed().toLower();
+    auto* tree = connection_tree_;
+    if (!tree || !connection_model_) {
+        return;
+    }
+
+    if (needle.isEmpty()) {
+        for (int i = 0; i < connection_model_->rowCount(); ++i) {
+            auto* conn = connection_model_->item(i);
+            tree->setRowHidden(i, QModelIndex(), false);
+            for (int j = 0; j < conn->rowCount(); ++j) {
+                auto* db = conn->child(j);
+                tree->setRowHidden(j, conn->index(), false);
+                for (int k = 0; k < db->rowCount(); ++k) {
+                    tree->setRowHidden(k, db->index(), false);
+                }
+            }
+        }
+        return;
+    }
+
+    for (int i = 0; i < connection_model_->rowCount(); ++i) {
+        auto* conn = connection_model_->item(i);
+        bool connHasMatch = conn->text().toLower().contains(needle);
+        for (int j = 0; j < conn->rowCount(); ++j) {
+            auto* db = conn->child(j);
+            bool dbHasMatch = db->text().toLower().contains(needle);
+            for (int k = 0; k < db->rowCount(); ++k) {
+                auto* table = db->child(k);
+                const bool tableMatch = table->text().toLower().contains(needle);
+                tree->setRowHidden(k, db->index(), !tableMatch);
+                if (tableMatch) {
+                    dbHasMatch = true;
+                    connHasMatch = true;
+                }
+            }
+            tree->setRowHidden(j, conn->index(), !dbHasMatch);
+            if (dbHasMatch) {
+                tree->expand(db->index());
+            }
+        }
+        tree->setRowHidden(i, QModelIndex(), !connHasMatch);
+        if (connHasMatch) {
+            tree->expand(conn->index());
+        }
+    }
 }

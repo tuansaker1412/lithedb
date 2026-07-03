@@ -390,7 +390,7 @@ void MainWindow::copy_selected_cell()
         return;
     }
     QGuiApplication::clipboard()->setText(index.data().toString());
-    status_label_->setText("Cell copied");
+    status_label_->setText("Cell copied to clipboard");
 }
 
 void MainWindow::open_cell_value_dialog(
@@ -503,7 +503,7 @@ void MainWindow::open_cell_value_dialog(
     bool openRowEditor = false;
     connect(copyButton, &QPushButton::clicked, &dialog, [this, rawValue, isNullValue]() {
         QGuiApplication::clipboard()->setText(isNullValue ? "NULL" : rawValue);
-        status_label_->setText("Cell value copied");
+        status_label_->setText("Cell copied to clipboard");
     });
     if (editRowButton) {
         connect(editRowButton, &QPushButton::clicked, &dialog, [&dialog, &openRowEditor]() {
@@ -537,7 +537,7 @@ void MainWindow::copy_selected_row_json()
         );
     }
     QGuiApplication::clipboard()->setText(QJsonDocument(object).toJson(QJsonDocument::Compact));
-    status_label_->setText("Row JSON copied");
+    status_label_->setText("Row copied as JSON");
 }
 
 void MainWindow::copy_selected_row_csv()
@@ -555,7 +555,7 @@ void MainWindow::copy_selected_row_csv()
         values.append(resultModel->item(row, column)->text());
     }
     QGuiApplication::clipboard()->setText(values.join(","));
-    status_label_->setText("Row CSV copied");
+    status_label_->setText("Row copied as CSV");
 }
 
 void MainWindow::export_current_table_csv()
@@ -587,7 +587,7 @@ void MainWindow::export_current_table_csv()
         }
         stream << values.join(",") << "\n";
     }
-    status_label_->setText("CSV exported");
+    status_label_->setText("Exported table as CSV");
 }
 
 void MainWindow::run_write_command_async(

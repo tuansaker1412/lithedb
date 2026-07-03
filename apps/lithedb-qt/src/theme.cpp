@@ -45,103 +45,103 @@ QPalette build_palette(bool dark)
 {
     QPalette palette;
     if (dark) {
-        palette.setColor(QPalette::Window, QColor("#111827"));
-        palette.setColor(QPalette::WindowText, QColor("#e5e7eb"));
-        palette.setColor(QPalette::Base, QColor("#0f172a"));
-        palette.setColor(QPalette::AlternateBase, QColor("#16202d"));
-        palette.setColor(QPalette::ToolTipBase, QColor("#0f172a"));
-        palette.setColor(QPalette::ToolTipText, QColor("#e5e7eb"));
-        palette.setColor(QPalette::Text, QColor("#e5e7eb"));
-        palette.setColor(QPalette::Button, QColor("#0f172a"));
-        palette.setColor(QPalette::ButtonText, QColor("#e5e7eb"));
+        palette.setColor(QPalette::Window, QColor("#1c1714"));
+        palette.setColor(QPalette::WindowText, QColor("#ece4da"));
+        palette.setColor(QPalette::Base, QColor("#221a15"));
+        palette.setColor(QPalette::AlternateBase, QColor("#2a221c"));
+        palette.setColor(QPalette::ToolTipBase, QColor("#221a15"));
+        palette.setColor(QPalette::ToolTipText, QColor("#ece4da"));
+        palette.setColor(QPalette::Text, QColor("#ece4da"));
+        palette.setColor(QPalette::Button, QColor("#251e19"));
+        palette.setColor(QPalette::ButtonText, QColor("#ece4da"));
         palette.setColor(QPalette::BrightText, QColor("#ffffff"));
-        palette.setColor(QPalette::PlaceholderText, QColor("#94a3b8"));
-        palette.setColor(QPalette::Highlight, QColor("#1d4ed8"));
-        palette.setColor(QPalette::HighlightedText, QColor("#eff6ff"));
-        palette.setColor(QPalette::Light, QColor("#1e293b"));
-        palette.setColor(QPalette::Midlight, QColor("#334155"));
-        palette.setColor(QPalette::Mid, QColor("#475569"));
-        palette.setColor(QPalette::Dark, QColor("#0b1220"));
-        palette.setColor(QPalette::Shadow, QColor("#020617"));
+        palette.setColor(QPalette::PlaceholderText, QColor("#9a8b7c"));
+        palette.setColor(QPalette::Highlight, QColor("#5a3d2a"));
+        palette.setColor(QPalette::HighlightedText, QColor("#f4e9dc"));
+        palette.setColor(QPalette::Light, QColor("#2e241e"));
+        palette.setColor(QPalette::Midlight, QColor("#34291f"));
+        palette.setColor(QPalette::Mid, QColor("#4a3a30"));
+        palette.setColor(QPalette::Dark, QColor("#120d0a"));
+        palette.setColor(QPalette::Shadow, QColor("#0a0706"));
         return palette;
     }
 
-    palette.setColor(QPalette::Window, QColor("#f4f6f8"));
-    palette.setColor(QPalette::WindowText, QColor("#1f2328"));
-    palette.setColor(QPalette::Base, QColor("#ffffff"));
-    palette.setColor(QPalette::AlternateBase, QColor("#f7f9fb"));
-    palette.setColor(QPalette::ToolTipBase, QColor("#ffffff"));
-    palette.setColor(QPalette::ToolTipText, QColor("#1f2328"));
-    palette.setColor(QPalette::Text, QColor("#1f2328"));
-    palette.setColor(QPalette::Button, QColor("#ffffff"));
-    palette.setColor(QPalette::ButtonText, QColor("#1f2328"));
+    palette.setColor(QPalette::Window, QColor("#f6f1ea"));
+    palette.setColor(QPalette::WindowText, QColor("#2a2018"));
+    palette.setColor(QPalette::Base, QColor("#fffaf5"));
+    palette.setColor(QPalette::AlternateBase, QColor("#f5efe6"));
+    palette.setColor(QPalette::ToolTipBase, QColor("#fffaf5"));
+    palette.setColor(QPalette::ToolTipText, QColor("#2a2018"));
+    palette.setColor(QPalette::Text, QColor("#2a2018"));
+    palette.setColor(QPalette::Button, QColor("#fffaf5"));
+    palette.setColor(QPalette::ButtonText, QColor("#2a2018"));
     palette.setColor(QPalette::BrightText, QColor("#ffffff"));
-    palette.setColor(QPalette::PlaceholderText, QColor("#7a828c"));
-    palette.setColor(QPalette::Highlight, QColor("#cfe5ff"));
-    palette.setColor(QPalette::HighlightedText, QColor("#10233f"));
-    palette.setColor(QPalette::Light, QColor("#ffffff"));
-    palette.setColor(QPalette::Midlight, QColor("#e5e9ee"));
-    palette.setColor(QPalette::Mid, QColor("#c9d2dc"));
-    palette.setColor(QPalette::Dark, QColor("#aeb8c2"));
-    palette.setColor(QPalette::Shadow, QColor("#7f8b96"));
+    palette.setColor(QPalette::PlaceholderText, QColor("#9a8b7c"));
+    palette.setColor(QPalette::Highlight, QColor("#ecdccb"));
+    palette.setColor(QPalette::HighlightedText, QColor("#3a2418"));
+    palette.setColor(QPalette::Light, QColor("#fffaf5"));
+    palette.setColor(QPalette::Midlight, QColor("#efe6db"));
+    palette.setColor(QPalette::Mid, QColor("#c9b8a6"));
+    palette.setColor(QPalette::Dark, QColor("#a89682"));
+    palette.setColor(QPalette::Shadow, QColor("#7a6b5c"));
     return palette;
 }
 
 const ThemeTokenMap& light_theme_tokens()
 {
     static const ThemeTokenMap tokens = {
-        {"__LITHEDB_WINDOW_BG__", "#f4f6f8"},
-        {"__LITHEDB_SURFACE_BG__", "#ffffff"},
-        {"__LITHEDB_SURFACE_ALT_BG__", "#f8fafc"},
-        {"__LITHEDB_SURFACE_PANEL_BG__", "#fafbfd"},
-        {"__LITHEDB_SURFACE_SIDEBAR_BG__", "#fbfcfd"},
-        {"__LITHEDB_TEXT_PRIMARY__", "#1f2328"},
-        {"__LITHEDB_TEXT_STRONG__", "#111827"},
-        {"__LITHEDB_TEXT_HEADING__", "#16202a"},
-        {"__LITHEDB_TEXT_SECONDARY__", "#5b6573"},
-        {"__LITHEDB_TEXT_TERTIARY__", "#334155"},
-        {"__LITHEDB_TEXT_MUTED__", "#475569"},
-        {"__LITHEDB_TEXT_SUBTLE__", "#66758a"},
+        {"__LITHEDB_WINDOW_BG__", "#f6f1ea"},
+        {"__LITHEDB_SURFACE_BG__", "#fffaf5"},
+        {"__LITHEDB_SURFACE_ALT_BG__", "#f5efe6"},
+        {"__LITHEDB_SURFACE_PANEL_BG__", "#f3ede3"},
+        {"__LITHEDB_SURFACE_SIDEBAR_BG__", "#f1ebe2"},
+        {"__LITHEDB_TEXT_PRIMARY__", "#2a2018"},
+        {"__LITHEDB_TEXT_STRONG__", "#1c140d"},
+        {"__LITHEDB_TEXT_HEADING__", "#241a12"},
+        {"__LITHEDB_TEXT_SECONDARY__", "#6b5d50"},
+        {"__LITHEDB_TEXT_TERTIARY__", "#574a3f"},
+        {"__LITHEDB_TEXT_MUTED__", "#6b5d50"},
+        {"__LITHEDB_TEXT_SUBTLE__", "#8a7b6c"},
         {"__LITHEDB_TEXT_ON_ACCENT__", "#ffffff"},
-        {"__LITHEDB_BORDER_SUBTLE__", "#d6dde5"},
-        {"__LITHEDB_BORDER_SOFT__", "#dbe2ea"},
-        {"__LITHEDB_FIELD_BORDER__", "#cfd7df"},
-        {"__LITHEDB_GRIDLINE__", "#edf1f5"},
-        {"__LITHEDB_SPLITTER_BG__", "#dfe5eb"},
-        {"__LITHEDB_HOVER_BG__", "#edf3fa"},
-        {"__LITHEDB_HOVER_SOFT_BG__", "#e9eff6"},
-        {"__LITHEDB_HOVER_SUBTLE_BG__", "#f3f6f9"},
-        {"__LITHEDB_ITEM_HOVER_BG__", "#f3f7fb"},
-        {"__LITHEDB_MENU_HOVER_BG__", "#e8f1fd"},
-        {"__LITHEDB_TAB_HOVER_BG__", "#f1f5f9"},
-        {"__LITHEDB_SELECTION_BG__", "#cfe5ff"},
-        {"__LITHEDB_SELECTION_TEXT__", "#10233f"},
-        {"__LITHEDB_ACCENT_BG__", "#0f6cbd"},
-        {"__LITHEDB_ACCENT_BG_HOVER__", "#135ea7"},
-        {"__LITHEDB_ACCENT_SOFT__", "#84b6f4"},
-        {"__LITHEDB_DISABLED_BG__", "#eef2f6"},
-        {"__LITHEDB_DISABLED_TEXT__", "#8a97a8"},
-        {"__LITHEDB_DISABLED_BORDER__", "#d9e0e7"},
-        {"__LITHEDB_DISABLED_SELECTION_BG__", "#dbe6f2"},
-        {"__LITHEDB_DISABLED_SELECTION_TEXT__", "#6b7785"},
-        {"__LITHEDB_PROGRESS_BG__", "#e6edf5"},
-        {"__LITHEDB_EDITOR_BG__", "#fcfdff"},
-        {"__LITHEDB_EDITOR_ALT_BG__", "#fbfcfe"},
-        {"__LITHEDB_HEADER_BG__", "#f7f9fb"},
-        {"__LITHEDB_HEADER_HOVER_BG__", "#eef4fb"},
-        {"__LITHEDB_ABOUT_GRADIENT_START__", "#eef6ff"},
-        {"__LITHEDB_ABOUT_GRADIENT_END__", "#dcecff"},
-        {"__LITHEDB_ABOUT_BORDER__", "#c8def7"},
-        {"__LITHEDB_BADGE_BG__", "#e9f3ff"},
-        {"__LITHEDB_BADGE_TEXT__", "#0f4c81"},
-        {"__LITHEDB_BADGE_BORDER__", "#cfe3fb"},
+        {"__LITHEDB_BORDER_SUBTLE__", "#e0d5c8"},
+        {"__LITHEDB_BORDER_SOFT__", "#e8dfd3"},
+        {"__LITHEDB_FIELD_BORDER__", "#d4c5b4"},
+        {"__LITHEDB_GRIDLINE__", "#efe7dc"},
+        {"__LITHEDB_SPLITTER_BG__", "#ddd2c4"},
+        {"__LITHEDB_HOVER_BG__", "#efe6db"},
+        {"__LITHEDB_HOVER_SOFT_BG__", "#f2ebe1"},
+        {"__LITHEDB_HOVER_SUBTLE_BG__", "#f5efe6"},
+        {"__LITHEDB_ITEM_HOVER_BG__", "#f0e8dd"},
+        {"__LITHEDB_MENU_HOVER_BG__", "#e8d8c8"},
+        {"__LITHEDB_TAB_HOVER_BG__", "#f0e8dd"},
+        {"__LITHEDB_SELECTION_BG__", "#ecdccb"},
+        {"__LITHEDB_SELECTION_TEXT__", "#3a2418"},
+        {"__LITHEDB_ACCENT_BG__", "#8a5a3c"},
+        {"__LITHEDB_ACCENT_BG_HOVER__", "#744730"},
+        {"__LITHEDB_ACCENT_SOFT__", "#c4a07a"},
+        {"__LITHEDB_DISABLED_BG__", "#f0e8dd"},
+        {"__LITHEDB_DISABLED_TEXT__", "#b0a294"},
+        {"__LITHEDB_DISABLED_BORDER__", "#e0d5c8"},
+        {"__LITHEDB_DISABLED_SELECTION_BG__", "#efe6db"},
+        {"__LITHEDB_DISABLED_SELECTION_TEXT__", "#b0a294"},
+        {"__LITHEDB_PROGRESS_BG__", "#e8dfd3"},
+        {"__LITHEDB_EDITOR_BG__", "#fffaf5"},
+        {"__LITHEDB_EDITOR_ALT_BG__", "#fdf8f2"},
+        {"__LITHEDB_HEADER_BG__", "#f5efe6"},
+        {"__LITHEDB_HEADER_HOVER_BG__", "#efe6db"},
+        {"__LITHEDB_ABOUT_GRADIENT_START__", "#f6ece1"},
+        {"__LITHEDB_ABOUT_GRADIENT_END__", "#ead9c8"},
+        {"__LITHEDB_ABOUT_BORDER__", "#e0cdb8"},
+        {"__LITHEDB_BADGE_BG__", "#f0e0d0"},
+        {"__LITHEDB_BADGE_TEXT__", "#6b4a30"},
+        {"__LITHEDB_BADGE_BORDER__", "#e0cdb8"},
         {"__LITHEDB_DANGER_TEXT__", "#b42318"},
-        {"__LITHEDB_CHECKBOX_BORDER__", "#c4cfdb"},
-        {"__LITHEDB_CHECKBOX_DISABLED_TEXT__", "#97a3b2"},
-        {"__LITHEDB_SCROLLBAR_HANDLE__", "#ccd6e2"},
-        {"__LITHEDB_SCROLLBAR_HANDLE_HOVER__", "#9fb7d3"},
-        {"__LITHEDB_CORNER_HINT_BG__", "rgba(15, 108, 189, 0.12)"},
-        {"__LITHEDB_CORNER_HINT_BORDER__", "rgba(15, 108, 189, 0.26)"},
+        {"__LITHEDB_CHECKBOX_BORDER__", "#c4b5a4"},
+        {"__LITHEDB_CHECKBOX_DISABLED_TEXT__", "#b0a294"},
+        {"__LITHEDB_SCROLLBAR_HANDLE__", "#c9b8a6"},
+        {"__LITHEDB_SCROLLBAR_HANDLE_HOVER__", "#b09a86"},
+        {"__LITHEDB_CORNER_HINT_BG__", "rgba(138, 90, 60, 0.14)"},
+        {"__LITHEDB_CORNER_HINT_BORDER__", "rgba(138, 90, 60, 0.30)"},
     };
     return tokens;
 }
@@ -149,58 +149,58 @@ const ThemeTokenMap& light_theme_tokens()
 const ThemeTokenMap& dark_theme_tokens()
 {
     static const ThemeTokenMap tokens = {
-        {"__LITHEDB_WINDOW_BG__", "#0f172a"},
-        {"__LITHEDB_SURFACE_BG__", "#111827"},
-        {"__LITHEDB_SURFACE_ALT_BG__", "#162033"},
-        {"__LITHEDB_SURFACE_PANEL_BG__", "#172131"},
-        {"__LITHEDB_SURFACE_SIDEBAR_BG__", "#0b1220"},
-        {"__LITHEDB_TEXT_PRIMARY__", "#e5e7eb"},
-        {"__LITHEDB_TEXT_STRONG__", "#f8fafc"},
-        {"__LITHEDB_TEXT_HEADING__", "#f8fafc"},
-        {"__LITHEDB_TEXT_SECONDARY__", "#d6e0eb"},
-        {"__LITHEDB_TEXT_TERTIARY__", "#e2e8f0"},
-        {"__LITHEDB_TEXT_MUTED__", "#c7d2de"},
-        {"__LITHEDB_TEXT_SUBTLE__", "#94a3b8"},
-        {"__LITHEDB_TEXT_ON_ACCENT__", "#eff6ff"},
-        {"__LITHEDB_BORDER_SUBTLE__", "#334155"},
-        {"__LITHEDB_BORDER_SOFT__", "#3b4b61"},
-        {"__LITHEDB_FIELD_BORDER__", "#475569"},
-        {"__LITHEDB_GRIDLINE__", "#243246"},
-        {"__LITHEDB_SPLITTER_BG__", "#334155"},
-        {"__LITHEDB_HOVER_BG__", "#1e293b"},
-        {"__LITHEDB_HOVER_SOFT_BG__", "#223048"},
-        {"__LITHEDB_HOVER_SUBTLE_BG__", "#1f2937"},
-        {"__LITHEDB_ITEM_HOVER_BG__", "#223247"},
-        {"__LITHEDB_MENU_HOVER_BG__", "#21466a"},
-        {"__LITHEDB_TAB_HOVER_BG__", "#28384d"},
-        {"__LITHEDB_SELECTION_BG__", "#1d4ed8"},
-        {"__LITHEDB_SELECTION_TEXT__", "#eff6ff"},
-        {"__LITHEDB_ACCENT_BG__", "#2563eb"},
-        {"__LITHEDB_ACCENT_BG_HOVER__", "#1d4ed8"},
-        {"__LITHEDB_ACCENT_SOFT__", "#60a5fa"},
-        {"__LITHEDB_DISABLED_BG__", "#1f2937"},
-        {"__LITHEDB_DISABLED_TEXT__", "#64748b"},
-        {"__LITHEDB_DISABLED_BORDER__", "#334155"},
-        {"__LITHEDB_DISABLED_SELECTION_BG__", "#273449"},
-        {"__LITHEDB_DISABLED_SELECTION_TEXT__", "#94a3b8"},
-        {"__LITHEDB_PROGRESS_BG__", "#243246"},
-        {"__LITHEDB_EDITOR_BG__", "#0f1a2e"},
-        {"__LITHEDB_EDITOR_ALT_BG__", "#101b2f"},
-        {"__LITHEDB_HEADER_BG__", "#172131"},
-        {"__LITHEDB_HEADER_HOVER_BG__", "#203047"},
-        {"__LITHEDB_ABOUT_GRADIENT_START__", "#172844"},
-        {"__LITHEDB_ABOUT_GRADIENT_END__", "#113255"},
-        {"__LITHEDB_ABOUT_BORDER__", "#28507a"},
-        {"__LITHEDB_BADGE_BG__", "#1a4065"},
-        {"__LITHEDB_BADGE_TEXT__", "#bfdbfe"},
-        {"__LITHEDB_BADGE_BORDER__", "#3b6f9f"},
-        {"__LITHEDB_DANGER_TEXT__", "#fca5a5"},
-        {"__LITHEDB_CHECKBOX_BORDER__", "#64748b"},
-        {"__LITHEDB_CHECKBOX_DISABLED_TEXT__", "#64748b"},
-        {"__LITHEDB_SCROLLBAR_HANDLE__", "#42536a"},
-        {"__LITHEDB_SCROLLBAR_HANDLE_HOVER__", "#6c88a8"},
-        {"__LITHEDB_CORNER_HINT_BG__", "rgba(37, 99, 235, 0.22)"},
-        {"__LITHEDB_CORNER_HINT_BORDER__", "rgba(96, 165, 250, 0.4)"},
+        {"__LITHEDB_WINDOW_BG__", "#1c1714"},
+        {"__LITHEDB_SURFACE_BG__", "#251e19"},
+        {"__LITHEDB_SURFACE_ALT_BG__", "#2a221c"},
+        {"__LITHEDB_SURFACE_PANEL_BG__", "#28201a"},
+        {"__LITHEDB_SURFACE_SIDEBAR_BG__", "#18120e"},
+        {"__LITHEDB_TEXT_PRIMARY__", "#ece4da"},
+        {"__LITHEDB_TEXT_STRONG__", "#fbf5ed"},
+        {"__LITHEDB_TEXT_HEADING__", "#f4ece2"},
+        {"__LITHEDB_TEXT_SECONDARY__", "#b8a99a"},
+        {"__LITHEDB_TEXT_TERTIARY__", "#c9bcae"},
+        {"__LITHEDB_TEXT_MUTED__", "#b8a99a"},
+        {"__LITHEDB_TEXT_SUBTLE__", "#9a8b7c"},
+        {"__LITHEDB_TEXT_ON_ACCENT__", "#1c140d"},
+        {"__LITHEDB_BORDER_SUBTLE__", "#3a2e26"},
+        {"__LITHEDB_BORDER_SOFT__", "#42352c"},
+        {"__LITHEDB_FIELD_BORDER__", "#4a3a30"},
+        {"__LITHEDB_GRIDLINE__", "#2e241e"},
+        {"__LITHEDB_SPLITTER_BG__", "#3a2e26"},
+        {"__LITHEDB_HOVER_BG__", "#34291f"},
+        {"__LITHEDB_HOVER_SOFT_BG__", "#2e241c"},
+        {"__LITHEDB_HOVER_SUBTLE_BG__", "#2a201a"},
+        {"__LITHEDB_ITEM_HOVER_BG__", "#34291f"},
+        {"__LITHEDB_MENU_HOVER_BG__", "#4a3528"},
+        {"__LITHEDB_TAB_HOVER_BG__", "#2e241c"},
+        {"__LITHEDB_SELECTION_BG__", "#5a3d2a"},
+        {"__LITHEDB_SELECTION_TEXT__", "#f4e9dc"},
+        {"__LITHEDB_ACCENT_BG__", "#d99a73"},
+        {"__LITHEDB_ACCENT_BG_HOVER__", "#c7855c"},
+        {"__LITHEDB_ACCENT_SOFT__", "#efc9a6"},
+        {"__LITHEDB_DISABLED_BG__", "#2a201a"},
+        {"__LITHEDB_DISABLED_TEXT__", "#7a6b5c"},
+        {"__LITHEDB_DISABLED_BORDER__", "#3a2e26"},
+        {"__LITHEDB_DISABLED_SELECTION_BG__", "#34291f"},
+        {"__LITHEDB_DISABLED_SELECTION_TEXT__", "#7a6b5c"},
+        {"__LITHEDB_PROGRESS_BG__", "#2e241e"},
+        {"__LITHEDB_EDITOR_BG__", "#221a15"},
+        {"__LITHEDB_EDITOR_ALT_BG__", "#261d17"},
+        {"__LITHEDB_HEADER_BG__", "#28201a"},
+        {"__LITHEDB_HEADER_HOVER_BG__", "#34291f"},
+        {"__LITHEDB_ABOUT_GRADIENT_START__", "#2e2218"},
+        {"__LITHEDB_ABOUT_GRADIENT_END__", "#241a13"},
+        {"__LITHEDB_ABOUT_BORDER__", "#4a3528"},
+        {"__LITHEDB_BADGE_BG__", "#4a3528"},
+        {"__LITHEDB_BADGE_TEXT__", "#efc9a6"},
+        {"__LITHEDB_BADGE_BORDER__", "#6b4a30"},
+        {"__LITHEDB_DANGER_TEXT__", "#f6a99a"},
+        {"__LITHEDB_CHECKBOX_BORDER__", "#6b5a4a"},
+        {"__LITHEDB_CHECKBOX_DISABLED_TEXT__", "#7a6b5c"},
+        {"__LITHEDB_SCROLLBAR_HANDLE__", "#5a4a3c"},
+        {"__LITHEDB_SCROLLBAR_HANDLE_HOVER__", "#7a6650"},
+        {"__LITHEDB_CORNER_HINT_BG__", "rgba(217, 154, 115, 0.22)"},
+        {"__LITHEDB_CORNER_HINT_BORDER__", "rgba(239, 201, 166, 0.4)"},
     };
     return tokens;
 }

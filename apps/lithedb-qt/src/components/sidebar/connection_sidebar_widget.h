@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+class QLineEdit;
 class QProgressBar;
 class QPushButton;
 class QStackedWidget;
@@ -26,6 +27,7 @@ public:
     QStandardItemModel* model() const;
     void set_view_mode(ViewMode mode);
     void set_connection_actions_enabled(bool hasSelection, bool isActive);
+    void apply_schema_filter(const QString& text);
 
 signals:
     void refreshSchemaRequested();
@@ -42,6 +44,7 @@ private:
     QToolButton* delete_button_ = nullptr;
     QPushButton* connect_button_ = nullptr;
     QPushButton* disconnect_button_ = nullptr;
+    QLineEdit* filter_edit_ = nullptr;
     QStackedWidget* content_stack_ = nullptr;
     QTreeView* connection_tree_ = nullptr;
     QStandardItemModel* connection_model_ = nullptr;
