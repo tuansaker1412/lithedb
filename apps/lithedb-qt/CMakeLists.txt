@@ -180,6 +180,15 @@ if(WIN32)
     set(CPACK_NSIS_DISPLAY_NAME "LitheDB")
     set(CPACK_NSIS_PACKAGE_NAME "LitheDB")
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_EXECUTABLES_DIRECTORY "bin")
+    set(CPACK_NSIS_CREATE_ICONS "
+        CreateShortCut \"$SMPROGRAMS\\$STARTMENU_FOLDER\\LitheDB.lnk\" \"$INSTDIR\\bin\\LitheDB.exe\"
+        CreateShortCut \"$DESKTOP\\LitheDB.lnk\" \"$INSTDIR\\bin\\LitheDB.exe\"
+    ")
+    set(CPACK_NSIS_DELETE_ICONS "
+        Delete \"$SMPROGRAMS\\$STARTMENU_FOLDER\\LitheDB.lnk\"
+        Delete \"$DESKTOP\\LitheDB.lnk\"
+    ")
 elseif(APPLE)
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_DMG_VOLUME_NAME "LitheDB")
