@@ -89,6 +89,25 @@ void MainWindow::remove_query_tab_page(QWidget* page)
     if (!page) {
         return;
     }
+    
+    auto* queryTab = query_tab_for_page(page);
+    if (queryTab && queryTab->editor()) {
+        const QString content = queryTab->editor()->toPlainText().trimmed();
+        if (!content.isEmpty()) {
+            const QString tabTitle = query_tabs_->tabText(query_tabs_->indexOf(page));
+            auto result = QMessageBox::question(
+                this,
+                tr("Close Query Tab"),
+                tr("Query tab \"%1\" contains SQL text.\nDo you want to close it?").arg(tabTitle),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No
+            );
+            if (result != QMessageBox::Yes) {
+                return;
+            }
+        }
+    }
+    
     const auto it = std::find_if(
         query_tab_states_.begin(),
         query_tab_states_.end(),
@@ -171,6 +190,9 @@ void MainWindow::execute_query_for_page(QWidget* page)
     }
 
     status_label_->setText("Running query...");
+    if (status_progress_) {
+        status_progress_->show();
+    }
     tab->status_label()->setText("Running...");
     tab->run_button()->setEnabled(false);
     tab->spinner()->show();
@@ -181,6 +203,9 @@ void MainWindow::execute_query_for_page(QWidget* page)
 
     auto* process = new QProcess(this);
     connect(process, &QProcess::finished, this, [this, process, page, resultPage](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (status_progress_) {
+            status_progress_->hide();
+        }
         const auto out = process->readAllStandardOutput();
         const auto err = process->readAllStandardError();
         process->deleteLater();
@@ -269,7 +294,7 @@ void MainWindow::copy_query_result_row_csv(QueryResultWidget* widget)
     const auto row = widget->grid()->selectionModel()->selectedRows().first().row();
     QStringList values;
     for (int column = 0; column < widget->model()->columnCount(); ++column) {
-        values.append(widget->model()->item(row, column)->text());
+        values.append(lith_table::escape_csv_field(widget->model()->item(row, column)->text()));
     }
     QGuiApplication::clipboard()->setText(values.join(","));
     status_label_->setText("Row copied as CSV");
@@ -292,13 +317,13 @@ void MainWindow::export_query_result_csv(QueryResultWidget* widget)
     QTextStream stream(&file);
     QStringList headers;
     for (int column = 0; column < widget->model()->columnCount(); ++column) {
-        headers.append(widget->model()->headerData(column, Qt::Horizontal).toString());
+        headers.append(lith_table::escape_csv_field(widget->model()->headerData(column, Qt::Horizontal).toString()));
     }
     stream << headers.join(",") << "\n";
     for (int row = 0; row < widget->model()->rowCount(); ++row) {
         QStringList values;
         for (int column = 0; column < widget->model()->columnCount(); ++column) {
-            values.append(widget->model()->item(row, column)->text());
+            values.append(lith_table::escape_csv_field(widget->model()->item(row, column)->text()));
         }
         stream << values.join(",") << "\n";
     }

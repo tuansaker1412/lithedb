@@ -47,6 +47,8 @@ qt_add_executable(lithedb-qt
     src/bridge_utils.h
     src/components/query/query_editor_tab_widget.cpp
     src/components/query/query_editor_tab_widget.h
+    src/components/query/sql_syntax_highlighter.cpp
+    src/components/query/sql_syntax_highlighter.h
     src/components/query/query_result_widget.cpp
     src/components/query/query_result_widget.h
     src/components/sidebar/connection_sidebar_widget.cpp

@@ -10,16 +10,18 @@
 ShortcutsDialog::ShortcutsDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle("Keyboard Shortcuts");
+    setWindowTitle(tr("Keyboard Shortcuts"));
     setModal(true);
     resize(440, 0);
+    setMinimumWidth(440);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(18, 18, 18, 18);
     layout->setSpacing(12);
 
-    auto* titleLabel = new QLabel("Keyboard Shortcuts", this);
+    auto* titleLabel = new QLabel(tr("Keyboard Shortcuts"), this);
     titleLabel->setObjectName("windowTitle");
+    titleLabel->setAccessibleName(tr("Keyboard Shortcuts"));
     layout->addWidget(titleLabel);
 
     QVBoxLayout* cardLayout = nullptr;
@@ -32,6 +34,7 @@ ShortcutsDialog::ShortcutsDialog(QWidget* parent)
         {"Ctrl+Enter", "Run query"},
         {"Ctrl+R", "Refresh schema"},
         {"Ctrl+Shift+C", "New connection"},
+        {"Ctrl+F", "Focus sidebar filter"},
         {"F5", "Reload table data"},
         {"F1", "Show this list"},
     };

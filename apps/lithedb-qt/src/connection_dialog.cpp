@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QGridLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -161,17 +162,20 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
 
     QVBoxLayout* formCardLayout = nullptr;
     auto* formCard = lith_ui::create_dialog_card(&dialog, formCardLayout);
-    auto* form = new QGridLayout;
-    form->setHorizontalSpacing(14);
-    form->setVerticalSpacing(12);
-
-    auto add_row = [form](int row, const QString& labelText, QWidget* field) {
+    
+    // Connection Info Group
+    auto* connectionInfoGroup = new QGroupBox("Connection Info", &dialog);
+    auto* connectionInfoForm = new QGridLayout(connectionInfoGroup);
+    connectionInfoForm->setHorizontalSpacing(14);
+    connectionInfoForm->setVerticalSpacing(12);
+    
+    auto add_info_row = [connectionInfoForm](int row, const QString& labelText, QWidget* field) {
         auto* label = new QLabel(labelText);
         label->setObjectName("fieldCaption");
         label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
         label->setMinimumWidth(132);
-        form->addWidget(label, row, 0);
-        form->addWidget(field, row, 1);
+        connectionInfoForm->addWidget(label, row, 0);
+        connectionInfoForm->addWidget(field, row, 1);
         return label;
     };
 
@@ -182,6 +186,26 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
     driverCombo->addItem("MySQL");
     driverCombo->addItem("SQLite");
     driverCombo->setCurrentText(driver_display_name(initial.value("driver").toString("PostgreSQL")));
+
+    add_info_row(0, "Name", nameEdit);
+    add_info_row(1, "Driver", driverCombo);
+    formCardLayout->addWidget(connectionInfoGroup);
+    
+    // Server Group
+    auto* serverGroup = new QGroupBox("Server", &dialog);
+    auto* serverForm = new QGridLayout(serverGroup);
+    serverForm->setHorizontalSpacing(14);
+    serverForm->setVerticalSpacing(12);
+    
+    auto add_server_row = [serverForm](int row, const QString& labelText, QWidget* field) {
+        auto* label = new QLabel(labelText);
+        label->setObjectName("fieldCaption");
+        label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+        label->setMinimumWidth(132);
+        serverForm->addWidget(label, row, 0);
+        serverForm->addWidget(field, row, 1);
+        return label;
+    };
 
     auto* hostEdit = new QLineEdit(initial.value("host").toString());
     hostEdit->setPlaceholderText("localhost");
@@ -211,16 +235,41 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
     statusLabel->setObjectName("dimCaption");
     statusLabel->setProperty("statusTone", "error");
 
-    add_row(0, "Name", nameEdit);
-    add_row(1, "Driver", driverCombo);
-    auto* hostLabel = add_row(2, "Host", hostEdit);
-    auto* portLabel = add_row(3, "Port", portSpin);
-    auto* usernameLabel = add_row(4, "Username", usernameEdit);
-    auto* passwordLabel = add_row(5, "Password", passwordEdit);
-    auto* databaseLabel = add_row(6, "Database", databaseField);
-    form->addWidget(sslCheck, 7, 1, 1, 1, Qt::AlignLeft);
-
-    formCardLayout->addLayout(form);
+    auto* hostLabel = add_server_row(0, "Host", hostEdit);
+    auto* portLabel = add_server_row(1, "Port", portSpin);
+    auto* usernameLabel = add_server_row(2, "Username", usernameEdit);
+    auto* passwordLabel = add_server_row(3, "Password", passwordEdit);
+    serverForm->addWidget(sslCheck, 4, 1, 1, 1, Qt::AlignLeft);
+    formCardLayout->addWidget(serverGroup);
+    
+    // Database Group
+    auto* databaseGroup = new QGroupBox("Database", &dialog);
+    auto* databaseForm = new QGridLayout(databaseGroup);
+    databaseForm->setHorizontalSpacing(14);
+    databaseForm->setVerticalSpacing(12);
+    
+    auto add_db_row = [databaseForm](int row, const QString& labelText, QWidget* field) {
+        auto* label = new QLabel(labelText);
+        label->setObjectName("fieldCaption");
+        label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+        label->setMinimumWidth(132);
+        databaseForm->addWidget(label, row, 0);
+        databaseForm->addWidget(field, row, 1);
+        return label;
+    };
+    
+    auto* databaseLabel = add_db_row(0, "Database", databaseField);
+    formCardLayout->addWidget(databaseGroup);
+    
+    // Tab order
+    QWidget::setTabOrder(nameEdit, driverCombo);
+    QWidget::setTabOrder(driverCombo, hostEdit);
+    QWidget::setTabOrder(hostEdit, portSpin);
+    QWidget::setTabOrder(portSpin, usernameEdit);
+    QWidget::setTabOrder(usernameEdit, passwordEdit);
+    QWidget::setTabOrder(passwordEdit, sslCheck);
+    QWidget::setTabOrder(sslCheck, databaseEdit);
+    
     formCardLayout->addWidget(helperLabel);
     formCardLayout->addWidget(statusLabel);
     layout->addWidget(formCard);

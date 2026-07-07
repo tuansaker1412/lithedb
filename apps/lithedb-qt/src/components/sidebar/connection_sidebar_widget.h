@@ -25,6 +25,7 @@ public:
 
     QTreeView* tree_view() const;
     QStandardItemModel* model() const;
+    QLineEdit* filter_edit() const;
     void set_view_mode(ViewMode mode);
     void set_connection_actions_enabled(bool hasSelection, bool isActive);
     void apply_schema_filter(const QString& text);
@@ -39,6 +40,7 @@ signals:
     void disconnectRequested();
     void createDatabaseRequested(const QString& connectionId);
     void dropDatabaseRequested(const QString& connectionId, const QString& databaseName);
+    void tableOpenRequested(const QString& connectionId, const QString& database, const QString& table);
 
 private:
     QToolButton* refresh_button_ = nullptr;

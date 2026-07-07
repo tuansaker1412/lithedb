@@ -142,6 +142,13 @@ const ThemeTokenMap& light_theme_tokens()
         {"__LITHEDB_SCROLLBAR_HANDLE_HOVER__", "#b09a86"},
         {"__LITHEDB_CORNER_HINT_BG__", "rgba(138, 90, 60, 0.14)"},
         {"__LITHEDB_CORNER_HINT_BORDER__", "rgba(138, 90, 60, 0.30)"},
+        {"__LITHEDB_DANGER_BG__", "#dc2626"},
+        {"__LITHEDB_DANGER_BG_HOVER__", "#b91c1c"},
+        {"__LITHEDB_DANGER_BANNER_BG__", "#fef2f2"},
+        {"__LITHEDB_DANGER_BANNER_BORDER__", "#fecaca"},
+        {"__LITHEDB_DANGER_DISABLED_BG__", "#9ca3af"},
+        {"__LITHEDB_DANGER_DISABLED_TEXT__", "#d1d5db"},
+        {"__LITHEDB_DANGER_TEXT_ON__", "#ffffff"},
     };
     return tokens;
 }
@@ -201,6 +208,13 @@ const ThemeTokenMap& dark_theme_tokens()
         {"__LITHEDB_SCROLLBAR_HANDLE_HOVER__", "#7a6650"},
         {"__LITHEDB_CORNER_HINT_BG__", "rgba(217, 154, 115, 0.22)"},
         {"__LITHEDB_CORNER_HINT_BORDER__", "rgba(239, 201, 166, 0.4)"},
+        {"__LITHEDB_DANGER_BG__", "#ef4444"},
+        {"__LITHEDB_DANGER_BG_HOVER__", "#dc2626"},
+        {"__LITHEDB_DANGER_BANNER_BG__", "#3a1c1c"},
+        {"__LITHEDB_DANGER_BANNER_BORDER__", "#7f1d1d"},
+        {"__LITHEDB_DANGER_DISABLED_BG__", "#4a3a30"},
+        {"__LITHEDB_DANGER_DISABLED_TEXT__", "#7a6b5c"},
+        {"__LITHEDB_DANGER_TEXT_ON__", "#1c140d"},
     };
     return tokens;
 }
@@ -322,6 +336,32 @@ void initialize_application_theme(QApplication& app)
 {
     Q_UNUSED(app);
     apply_theme_mode(current_theme_mode());
+}
+
+bool is_dark_mode()
+{
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    if (!app) {
+        return false;
+    }
+    return app->palette().color(QPalette::Window).lightness() < 128;
+}
+
+ThemeWatcher::ThemeWatcher(QObject* parent)
+    : QObject(parent)
+{
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    if (app) {
+        app->installEventFilter(this);
+    }
+}
+
+bool ThemeWatcher::eventFilter(QObject* obj, QEvent* event)
+{
+    if (event->type() == QEvent::ApplicationPaletteChange) {
+        emit themeChanged(is_dark_mode());
+    }
+    return QObject::eventFilter(obj, event);
 }
 
 } // namespace lith_theme

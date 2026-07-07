@@ -22,6 +22,7 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName("sidebar");
+    setAccessibleName(tr("Connections sidebar"));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 12, 12, 12);
@@ -32,13 +33,14 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     headerLayout->setContentsMargins(0, 0, 0, 0);
     headerLayout->setSpacing(8);
 
-    auto* title = new QLabel("Connections", header);
+    auto* title = new QLabel(tr("Connections"), header);
     title->setObjectName("sectionTitle");
     refresh_button_ = lith_ui::make_flat_icon_button(
         "view-refresh-symbolic",
         QStyle::SP_BrowserReload,
         "Refresh Schema (Ctrl+R)"
     );
+    refresh_button_->setWhatsThis(tr("Reload the connection list and refresh the schema tree for the active connection. Shortcut: Ctrl+R"));
     headerLayout->addWidget(title);
     headerLayout->addStretch(1);
     headerLayout->addWidget(refresh_button_);
@@ -91,7 +93,9 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     filter_edit_->setPlaceholderText("Filter tables...");
     filter_edit_->setClearButtonEnabled(true);
     filter_edit_->setObjectName("sidebarFilter");
-    filter_edit_->setVisible(false);
+    filter_edit_->setToolTip("Type to filter tables by name");
+    filter_edit_->setWhatsThis("Type text here to filter the table list. Only tables containing your text will be shown. Press Escape to clear the filter.");
+    filter_edit_->setVisible(true);
 
     connection_tree_ = new QTreeView(this);
     connection_tree_->setHeaderHidden(true);
@@ -99,6 +103,8 @@ ConnectionSidebarWidget::ConnectionSidebarWidget(QWidget* parent)
     connection_tree_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     connection_tree_->setObjectName("connectionTree");
     connection_tree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connection_tree_->setAccessibleName(tr("Connection and table tree view"));
+    connection_tree_->setWhatsThis(tr("Navigate your saved connections, databases, and tables. Double-click a connection to connect, or double-click a table to browse its data."));
     connection_model_ = new QStandardItemModel(this);
     connection_tree_->setModel(connection_model_);
 
@@ -141,6 +147,11 @@ QTreeView* ConnectionSidebarWidget::tree_view() const
 QStandardItemModel* ConnectionSidebarWidget::model() const
 {
     return connection_model_;
+}
+
+QLineEdit* ConnectionSidebarWidget::filter_edit() const
+{
+    return filter_edit_;
 }
 
 void ConnectionSidebarWidget::set_view_mode(ViewMode mode)
@@ -238,6 +249,34 @@ void ConnectionSidebarWidget::show_context_menu(const QPoint& pos)
 
     if (kind == "connection") {
         auto connectionId = targetItem->data(Qt::UserRole + 2).toString();
+        auto isConnected = targetItem->data(Qt::UserRole + 10).toBool();
+        
+        if (!isConnected) {
+            auto* connectAction = menu.addAction("Connect");
+            connect(connectAction, &QAction::triggered, this, [this]() {
+                emit connectRequested();
+            });
+        } else {
+            auto* disconnectAction = menu.addAction("Disconnect");
+            connect(disconnectAction, &QAction::triggered, this, [this]() {
+                emit disconnectRequested();
+            });
+        }
+        
+        menu.addSeparator();
+        
+        auto* editAction = menu.addAction("Edit Connection...");
+        connect(editAction, &QAction::triggered, this, [this]() {
+            emit editConnectionRequested();
+        });
+        
+        auto* deleteAction = menu.addAction("Delete Connection");
+        connect(deleteAction, &QAction::triggered, this, [this]() {
+            emit deleteConnectionRequested();
+        });
+        
+        menu.addSeparator();
+        
         auto* newDbAction = menu.addAction("New Database...");
         connect(newDbAction, &QAction::triggered, this, [this, connectionId]() {
             emit createDatabaseRequested(connectionId);
@@ -250,6 +289,16 @@ void ConnectionSidebarWidget::show_context_menu(const QPoint& pos)
             emit dropDatabaseRequested(connectionId, databaseName);
         });
     } else if (kind == "table" && walkItem && walkItem->data(Qt::UserRole + 1).toString() == "database") {
+        auto* openAction = menu.addAction("Open Table");
+        connect(openAction, &QAction::triggered, this, [this, targetItem]() {
+            auto connectionId = targetItem->data(Qt::UserRole + 2).toString();
+            auto database = targetItem->data(Qt::UserRole + 3).toString();
+            auto table = targetItem->data(Qt::UserRole + 4).toString();
+            emit tableOpenRequested(connectionId, database, table);
+        });
+        
+        menu.addSeparator();
+        
         auto connectionId = walkItem->data(Qt::UserRole + 2).toString();
         auto databaseName = walkItem->data(Qt::UserRole + 3).toString();
         auto* dropDbAction = menu.addAction("Drop Database...");

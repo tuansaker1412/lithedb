@@ -19,5 +19,6 @@ const QStandardItem* result_item_for_column(
     const QString& columnName
 );
 std::optional<qulonglong> parse_rows_affected_payload(const QByteArray& output);
+QString escape_csv_field(const QString& field);
 
 } // namespace lith_table

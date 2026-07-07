@@ -5,6 +5,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFrame>
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -12,6 +13,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QProgressBar>
+#include <QSignalBlocker>
 #include <QStandardItemModel>
 #include <QStackedWidget>
 #include <QStyle>
@@ -46,12 +48,23 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     prev_button_->setEnabled(false);
     next_button_->setEnabled(false);
 
+    page_size_combo_ = new QComboBox(this);
+    page_size_combo_->addItems({"25", "50", "100", "200"});
+    page_size_combo_->setCurrentText("100");
+    page_size_combo_->setToolTip("Number of rows per page");
+    page_size_combo_->setWhatsThis("Select how many rows to display per page. Larger values may be slower for tables with many rows.");
+    auto* pageSizeLabel = new QLabel("Rows:", this);
+    pageSizeLabel->setObjectName("dimCaption");
+
     sort_column_input_ = new QLineEdit(this);
     sort_column_input_->setPlaceholderText("Column to sort");
-    sort_column_input_->setMinimumWidth(280);
+    sort_column_input_->setMinimumWidth(200);
     sort_column_input_->setClearButtonEnabled(true);
+    sort_column_input_->setToolTip("Enter column name to sort by");
+    sort_column_input_->setWhatsThis("Enter the name of a column to sort the table by. Click on a column header to auto-fill this field. Press Enter or click the Sort button to apply.");
     sort_direction_toggle_ = new QCheckBox("ASC", this);
     sort_direction_toggle_->setChecked(true);
+    sort_direction_toggle_->setToolTip("Toggle sort direction: ascending or descending");
     auto* sortButton = lith_ui::make_flat_icon_button("view-sort-ascending-symbolic", QStyle::SP_ArrowUp, "Apply Sort", "Sort");
     sortButton->setObjectName("accentPillButton");
 
@@ -99,6 +112,9 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     toolbarTopRow->addWidget(reload);
     toolbarTopRow->addWidget(prev_button_);
     toolbarTopRow->addWidget(next_button_);
+    toolbarTopRow->addSpacing(8);
+    toolbarTopRow->addWidget(pageSizeLabel);
+    toolbarTopRow->addWidget(page_size_combo_);
     toolbarTopRow->addStretch(1);
     toolbarTopRow->addWidget(spinner_);
     toolbarTopRow->addWidget(status_label_);
@@ -125,14 +141,18 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     grid_->horizontalHeader()->setStretchLastSection(true);
     grid_->horizontalHeader()->setMinimumSectionSize(96);
     grid_->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    grid_->horizontalHeader()->setSortIndicatorShown(true);
+    grid_->horizontalHeader()->setSectionsClickable(true);
     grid_->verticalHeader()->hide();
     grid_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     grid_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    grid_->setSelectionMode(QAbstractItemView::SingleSelection);
+    grid_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     grid_->setShowGrid(false);
     grid_->setAlternatingRowColors(false);
     grid_->setSortingEnabled(false);
     grid_->setContextMenuPolicy(Qt::CustomContextMenu);
+    grid_->setAccessibleName(tr("Table data grid"));
+    grid_->setWhatsThis(tr("Displays rows from the selected table. Use toolbar buttons or right-click for Edit, Duplicate, and Delete operations. Click column headers to sort."));
 
     stack_ = new QStackedWidget(this);
     stack_->addWidget(lith_ui::make_loading_state("Loading table rows", "Fetching the current page and keeping the window responsive."));
@@ -157,6 +177,19 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     connect(sort_column_input_, &QLineEdit::returnPressed, this, &TableDataWidget::applySortRequested);
     connect(sort_direction_toggle_, &QCheckBox::toggled, this, [this](bool checked) {
         sort_direction_toggle_->setText(checked ? "ASC" : "DESC");
+    });
+    connect(grid_->horizontalHeader(), &QHeaderView::sortIndicatorChanged, this, [this](int logicalIndex, Qt::SortOrder order) {
+        if (logicalIndex >= 0 && logicalIndex < model_->columnCount()) {
+            sort_column_input_->setText(model_->headerData(logicalIndex, Qt::Horizontal).toString());
+            const bool isAsc = (order == Qt::AscendingOrder);
+            const QSignalBlocker blocker(sort_direction_toggle_);
+            sort_direction_toggle_->setChecked(isAsc);
+            sort_direction_toggle_->setText(isAsc ? "ASC" : "DESC");
+            emit applySortRequested();
+        }
+    });
+    connect(page_size_combo_, &QComboBox::currentTextChanged, this, [this](const QString& text) {
+        emit pageSizeChanged(text.toInt());
     });
     connect(add, &QToolButton::clicked, this, &TableDataWidget::insertRowRequested);
     connect(duplicate, &QToolButton::clicked, this, &TableDataWidget::duplicateRowRequested);
@@ -213,3 +246,4 @@ QStandardItemModel* TableDataWidget::model() const { return model_; }
 QLabel* TableDataWidget::status_label() const { return status_label_; }
 QProgressBar* TableDataWidget::spinner() const { return spinner_; }
 QStackedWidget* TableDataWidget::stack() const { return stack_; }
+QComboBox* TableDataWidget::page_size_combo() const { return page_size_combo_; }

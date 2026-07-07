@@ -21,5 +21,4 @@ private slots:
 private:
     QLineEdit* name_edit_ = nullptr;
     QLabel* info_label_ = nullptr;
-    QPushButton* create_button_ = nullptr;
 };

@@ -587,6 +587,33 @@ QWidget#topRightCornerHint {
     border-bottom: none;
 }
 
+QLabel#dangerBanner {
+    color: __LITHEDB_DANGER_TEXT__;
+    font-weight: bold;
+    padding: 8px;
+    background: __LITHEDB_DANGER_BANNER_BG__;
+    border: 1px solid __LITHEDB_DANGER_BANNER_BORDER__;
+    border-radius: 6px;
+}
+
+QPushButton#dangerButton {
+    background: __LITHEDB_DANGER_BG__;
+    color: __LITHEDB_DANGER_TEXT_ON__;
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-weight: bold;
+    border: none;
+}
+
+QPushButton#dangerButton:disabled {
+    background: __LITHEDB_DANGER_DISABLED_BG__;
+    color: __LITHEDB_DANGER_DISABLED_TEXT__;
+}
+
+QPushButton#dangerButton:hover:!disabled {
+    background: __LITHEDB_DANGER_BG_HOVER__;
+}
+
 QWidget#bottomLeftCornerHint {
     border-bottom-left-radius: 9px;
     border-top: none;

@@ -10,6 +10,7 @@ class QStandardItemModel;
 class QStackedWidget;
 class QTableView;
 class QToolButton;
+class QComboBox;
 
 class TableDataWidget : public QWidget
 {
@@ -27,12 +28,14 @@ public:
     QLabel* status_label() const;
     QProgressBar* spinner() const;
     QStackedWidget* stack() const;
+    QComboBox* page_size_combo() const;
 
 signals:
     void reloadRequested();
     void previousPageRequested();
     void nextPageRequested();
     void applySortRequested();
+    void pageSizeChanged(int new_size);
     void insertRowRequested();
     void duplicateRowRequested();
     void editRowRequested();
@@ -56,4 +59,5 @@ private:
     QLabel* status_label_ = nullptr;
     QProgressBar* spinner_ = nullptr;
     QStackedWidget* stack_ = nullptr;
+    QComboBox* page_size_combo_ = nullptr;
 };

@@ -7,11 +7,13 @@
 #include <vector>
 
 class QApplication;
+class QCloseEvent;
 class QEvent;
 class QJsonObject;
 class QLabel;
 class QModelIndex;
 class QObject;
+class QProgressBar;
 class QSplitter;
 class QTabWidget;
 class QTableView;
@@ -32,6 +34,9 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     bool eventFilter(QObject* watched, QEvent* event) override;
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     void build_toolbar();
@@ -111,6 +116,7 @@ private:
     QStackedWidget* data_stack_ = nullptr;
     ConnectionSidebarWidget* sidebar_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QProgressBar* status_progress_ = nullptr;
     QWidget* top_left_corner_hint_ = nullptr;
     QWidget* top_right_corner_hint_ = nullptr;
     QWidget* bottom_left_corner_hint_ = nullptr;

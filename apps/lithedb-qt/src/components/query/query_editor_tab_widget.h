@@ -7,6 +7,7 @@ class QLabel;
 class QPlainTextEdit;
 class QProgressBar;
 class QPushButton;
+class SqlSyntaxHighlighter;
 
 class QueryEditorTabWidget : public QWidget
 {
@@ -29,4 +30,5 @@ private:
     QPushButton* run_button_ = nullptr;
     QProgressBar* spinner_ = nullptr;
     QLabel* status_label_ = nullptr;
+    SqlSyntaxHighlighter* highlighter_ = nullptr;
 };

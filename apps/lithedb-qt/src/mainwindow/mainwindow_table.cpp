@@ -183,6 +183,11 @@ TablePageWidget* MainWindow::ensure_table_tab(const QString& connectionId, const
     connect(tablePage->data_widget(), &TableDataWidget::contextEditRequested, this, [this]() { edit_current_row(); });
     connect(tablePage->data_widget(), &TableDataWidget::contextDuplicateRequested, this, [this]() { duplicate_current_row(); });
     connect(tablePage->data_widget(), &TableDataWidget::contextDeleteRequested, this, [this]() { delete_current_row(); });
+    connect(tablePage->data_widget(), &TableDataWidget::pageSizeChanged, this, [this](int new_size) {
+        current_table_page_size_ = new_size;
+        current_table_page_ = 0;  // Reset to first page when changing page size
+        load_current_table_page();
+    });
     connect(tablePage->structure_widget(), &TableStructureWidget::reloadRequested, this, [this]() { reload_current_table(); });
     const auto tabIndex = data_tabs_->addTab(tablePage, table);
     data_tabs_->setCurrentIndex(tabIndex);
@@ -231,11 +236,17 @@ void MainWindow::load_current_table_page()
         QString("Loading %1 page %2...").arg(current_table_).arg(current_table_page_ + 1)
     );
     set_table_page_loading(currentPage, true, QString("Loading page %1...").arg(current_table_page_ + 1));
+    if (status_progress_) {
+        status_progress_->show();
+    }
     auto* tableProcess = new QProcess(this);
     connect(tableProcess, &QProcess::finished, this, [this, tableProcess, currentPage](int exitCode, QProcess::ExitStatus exitStatus) {
         const auto out = tableProcess->readAllStandardOutput();
         const auto err = tableProcess->readAllStandardError();
         tableProcess->deleteLater();
+        if (status_progress_) {
+            status_progress_->hide();
+        }
         if (exitStatus != QProcess::NormalExit || exitCode != 0) {
             QMessageBox::warning(this, "Load Table Failed", QString::fromLocal8Bit(err));
             status_label_->setText("Load failed");
@@ -552,7 +563,7 @@ void MainWindow::copy_selected_row_csv()
     const auto row = resultGrid->selectionModel()->selectedRows().first().row();
     QStringList values;
     for (int column = 0; column < resultModel->columnCount(); ++column) {
-        values.append(resultModel->item(row, column)->text());
+        values.append(lith_table::escape_csv_field(resultModel->item(row, column)->text()));
     }
     QGuiApplication::clipboard()->setText(values.join(","));
     status_label_->setText("Row copied as CSV");
@@ -577,13 +588,13 @@ void MainWindow::export_current_table_csv()
     QTextStream stream(&file);
     QStringList headers;
     for (int column = 0; column < resultModel->columnCount(); ++column) {
-        headers.append(resultModel->headerData(column, Qt::Horizontal).toString());
+        headers.append(lith_table::escape_csv_field(resultModel->headerData(column, Qt::Horizontal).toString()));
     }
     stream << headers.join(",") << "\n";
     for (int row = 0; row < resultModel->rowCount(); ++row) {
         QStringList values;
         for (int column = 0; column < resultModel->columnCount(); ++column) {
-            values.append(resultModel->item(row, column)->text());
+            values.append(lith_table::escape_csv_field(resultModel->item(row, column)->text()));
         }
         stream << values.join(",") << "\n";
     }
@@ -599,8 +610,14 @@ void MainWindow::run_write_command_async(
 )
 {
     status_label_->setText(pendingStatus);
+    if (status_progress_) {
+        status_progress_->show();
+    }
     auto* process = new QProcess(this);
     connect(process, &QProcess::finished, this, [this, process, successStatus, successTitle, errorTitle](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (status_progress_) {
+            status_progress_->hide();
+        }
         const auto out = process->readAllStandardOutput();
         const auto err = process->readAllStandardError();
         process->deleteLater();

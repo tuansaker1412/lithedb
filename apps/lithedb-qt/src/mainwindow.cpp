@@ -3,8 +3,12 @@
 #include "bridge_utils.h"
 #include "mainwindow/mainwindow_shared.h"
 
+#include <QCloseEvent>
 #include <QLabel>
 #include <QMenuBar>
+#include <QProgressBar>
+#include <QSettings>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabBar>
@@ -48,6 +52,14 @@ MainWindow::MainWindow(QWidget* parent)
 
     status_label_ = new QLabel("Ready");
     statusBar()->addWidget(status_label_, 1);
+    
+    status_progress_ = new QProgressBar();
+    status_progress_->setRange(0, 0);
+    status_progress_->setTextVisible(false);
+    status_progress_->setFixedWidth(120);
+    status_progress_->hide();
+    statusBar()->addPermanentWidget(status_progress_);
+    
     install_resize_tracking(this);
     if (centralWidget()) {
         install_resize_tracking(centralWidget());
@@ -73,6 +85,26 @@ MainWindow::MainWindow(QWidget* parent)
         }
     });
     data_tabs_->tabBar()->installEventFilter(this);
+
+    QSettings settings;
+    if (settings.contains("window/geometry")) {
+        restoreGeometry(settings.value("window/geometry").toByteArray());
+    }
+    if (settings.contains("window/mainSplitter")) {
+        main_splitter_->restoreState(settings.value("window/mainSplitter").toByteArray());
+    }
+    if (settings.contains("window/queryResultSplitter")) {
+        query_result_splitter_->restoreState(settings.value("window/queryResultSplitter").toByteArray());
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    QSettings settings;
+    settings.setValue("window/geometry", saveGeometry());
+    settings.setValue("window/mainSplitter", main_splitter_->saveState());
+    settings.setValue("window/queryResultSplitter", query_result_splitter_->saveState());
+    QMainWindow::closeEvent(event);
 }
 
 QString MainWindow::bridge_binary_path() const

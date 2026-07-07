@@ -4,6 +4,8 @@
 
 #include "../components/sidebar/connection_sidebar_widget.h"
 #include "../components/query/query_editor_tab_widget.h"
+#include "../components/table/table_page_widget.h"
+#include "../components/table/table_data_widget.h"
 #include "mainwindow_shared.h"
 
 #include "../bridge_utils.h"
@@ -20,10 +22,12 @@
 #include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QTableView>
 #include <QTimer>
 #include <QToolButton>
 #include <QTreeView>
@@ -57,6 +61,15 @@ void MainWindow::seed_sidebar()
             connect_selected_connection();
         }
     });
+    
+    auto* deleteShortcut = new QShortcut(QKeySequence::Delete, tree);
+    connect(deleteShortcut, &QShortcut::activated, this, [this]() {
+        auto* tablePage = current_table_page();
+        auto* resultGrid = tablePage ? tablePage->data_widget()->grid() : nullptr;
+        if (resultGrid && resultGrid->hasFocus() && resultGrid->selectionModel() && resultGrid->selectionModel()->hasSelection()) {
+            delete_current_row();
+        }
+    });
 
     connect(sidebar_, &ConnectionSidebarWidget::refreshSchemaRequested, this, [this]() { refresh_schema(); });
     connect(sidebar_, &ConnectionSidebarWidget::addConnectionRequested, this, [this]() { open_connection_dialog(); });
@@ -75,6 +88,9 @@ void MainWindow::seed_sidebar()
     });
     connect(sidebar_, &ConnectionSidebarWidget::dropDatabaseRequested, this, [this](const QString& connectionId, const QString& databaseName) {
         drop_database_dialog(connectionId, databaseName);
+    });
+    connect(sidebar_, &ConnectionSidebarWidget::tableOpenRequested, this, [this](const QString& connectionId, const QString& database, const QString& table) {
+        load_table_content(connectionId, database, table);
     });
     refresh_connection_buttons();
 }

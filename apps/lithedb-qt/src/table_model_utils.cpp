@@ -89,5 +89,15 @@ std::optional<qulonglong> parse_rows_affected_payload(const QByteArray& output)
     return std::nullopt;
 }
 
+QString escape_csv_field(const QString& field)
+{
+    if (field.contains(',') || field.contains('"') || field.contains('\n') || field.contains('\r')) {
+        QString escaped = field;
+        escaped.replace('"', "\"\"");
+        return '"' + escaped + '"';
+    }
+    return field;
+}
+
 } // namespace lith_table
 

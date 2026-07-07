@@ -61,8 +61,10 @@ QueryResultWidget::QueryResultWidget(QWidget* parent)
     grid_->verticalHeader()->hide();
     grid_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     grid_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    grid_->setSelectionMode(QAbstractItemView::SingleSelection);
+    grid_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     grid_->setShowGrid(false);
+    grid_->setAccessibleName(tr("Query result data grid"));
+    grid_->setWhatsThis(tr("Displays the results of your SQL query. Select rows to copy cell values or export as JSON/CSV. Double-click a cell to view its full value."));
 
     stack_ = new QStackedWidget(this);
     stack_->addWidget(lith_ui::make_loading_state("Running query", "Waiting for rows from the selected connection."));

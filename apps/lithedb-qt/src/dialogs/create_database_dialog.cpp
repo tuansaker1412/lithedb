@@ -1,45 +1,63 @@
 #include "create_database_dialog.h"
-#include <QRegularExpression>
 
-#include <QLineEdit>
+#include "../ui_helpers.h"
+
+#include <QDialogButtonBox>
 #include <QLabel>
-#include <QPushButton>
-#include <QVBoxLayout>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QRegularExpression>
+#include <QVBoxLayout>
 
 CreateDatabaseDialog::CreateDatabaseDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle("Create New Database");
-    setMinimumWidth(400);
+    setWindowTitle(tr("Create New Database"));
+    setModal(true);
+    setMinimumWidth(420);
 
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(18, 18, 18, 18);
+    layout->setSpacing(12);
+
+    auto* titleLabel = new QLabel(tr("Create New Database"), this);
+    titleLabel->setObjectName("windowTitle");
+    titleLabel->setAccessibleName(tr("Create New Database"));
+    layout->addWidget(titleLabel);
 
     info_label_ = new QLabel(this);
+    info_label_->setObjectName("dimCaption");
     info_label_->setWordWrap(true);
     layout->addWidget(info_label_);
 
-    auto* name_label = new QLabel("Database Name:", this);
-    layout->addWidget(name_label);
+    QVBoxLayout* cardLayout = nullptr;
+    auto* card = lith_ui::create_dialog_card(this, cardLayout);
 
-    name_edit_ = new QLineEdit(this);
-    name_edit_->setPlaceholderText("Enter database name");
+    auto* nameLabel = new QLabel(tr("Database Name"), card);
+    nameLabel->setObjectName("fieldCaption");
+    cardLayout->addWidget(nameLabel);
+
+    name_edit_ = new QLineEdit(card);
+    name_edit_->setPlaceholderText(tr("Enter database name"));
+    name_edit_->setAccessibleName(tr("Database name input"));
+    name_edit_->setWhatsThis(tr("Enter a name for the new database. Use only alphanumeric characters, underscores, and hyphens."));
     name_edit_->setFocus();
-    layout->addWidget(name_edit_);
+    cardLayout->addWidget(name_edit_);
 
-    auto* button_layout = new QHBoxLayout;
-    button_layout->addStretch();
+    layout->addWidget(card);
 
-    create_button_ = new QPushButton("Create", this);
-    create_button_->setDefault(true);
-    connect(create_button_, &QPushButton::clicked, this, &CreateDatabaseDialog::validate_and_accept);
-    button_layout->addWidget(create_button_);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    buttons->button(QDialogButtonBox::Ok)->setObjectName("accentPillButton");
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Create"));
+    buttons->button(QDialogButtonBox::Ok)->setAccessibleName(tr("Create database"));
+    buttons->button(QDialogButtonBox::Cancel)->setAccessibleName(tr("Cancel"));
+    connect(buttons, &QDialogButtonBox::accepted, this, &CreateDatabaseDialog::validate_and_accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
 
-    auto* cancel_button = new QPushButton("Cancel", this);
-    connect(cancel_button, &QPushButton::clicked, this, &QDialog::reject);
-    button_layout->addWidget(cancel_button);
-
-    layout->addLayout(button_layout);
+    QWidget::setTabOrder(name_edit_, buttons->button(QDialogButtonBox::Ok));
+    QWidget::setTabOrder(buttons->button(QDialogButtonBox::Ok), buttons->button(QDialogButtonBox::Cancel));
 }
 
 void CreateDatabaseDialog::set_connection_info(const QString& connection_name, const QString& driver)

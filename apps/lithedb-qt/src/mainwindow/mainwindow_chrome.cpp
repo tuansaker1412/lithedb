@@ -21,6 +21,7 @@
 #include <QHeaderView>
 #include <QHoverEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMouseEvent>
@@ -334,11 +335,11 @@ bool MainWindow::start_window_resize(Qt::Edges edges)
 void MainWindow::build_toolbar()
 {
     toolbar_ = addToolBar("Main");
-    toolbar_->setMovable(false);
-    toolbar_->setFloatable(false);
+    toolbar_->setMovable(true);
+    toolbar_->setFloatable(true);
     toolbar_->setObjectName("topToolbar");
     toolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    toolbar_->setIconSize(QSize(16, 16));
+    toolbar_->setIconSize(QSize(24, 24));
 
     auto* title = new QLabel("LitheDB");
     title->setObjectName("windowTitle");
@@ -383,6 +384,20 @@ void MainWindow::build_toolbar()
     reloadTableAction->setShortcut(QKeySequence(Qt::Key_F5));
     reloadTableAction->setShortcutContext(Qt::WindowShortcut);
     addAction(reloadTableAction);
+
+    auto* focusFilterAction = new QAction("Focus Sidebar Filter", this);
+    focusFilterAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_F));
+    focusFilterAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(focusFilterAction);
+    connect(focusFilterAction, &QAction::triggered, this, [this]() {
+        if (sidebar_ && sidebar_->filter_edit()) {
+            sidebar_->filter_edit()->setVisible(true);
+            sidebar_->filter_edit()->setFocus();
+            sidebar_->filter_edit()->selectAll();
+        } else if (sidebar_) {
+            sidebar_->setFocus();
+        }
+    });
 
     auto* preferencesAction = new QAction("Preferences", this);
     addAction(preferencesAction);
