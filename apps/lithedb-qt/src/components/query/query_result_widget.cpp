@@ -32,9 +32,17 @@ QueryResultWidget::QueryResultWidget(QWidget* parent)
     toolbarLayout->setSpacing(8);
 
     auto* copyCell = lith_ui::make_flat_icon_button("edit-copy-symbolic", QStyle::SP_FileDialogContentsView, "Copy Cell");
+    copyCell->setAccessibleName(tr("Copy cell value"));
+    copyCell->setWhatsThis(tr("Copy the value of the currently selected cell to the clipboard"));
     auto* copyJson = lith_ui::make_flat_icon_button("text-x-script-symbolic", QStyle::SP_FileIcon, "Copy Row as JSON", "JSON");
+    copyJson->setAccessibleName(tr("Copy row as JSON"));
+    copyJson->setWhatsThis(tr("Copy the currently selected row as a JSON object to the clipboard"));
     auto* copyCsv = lith_ui::make_flat_icon_button("text-csv-symbolic", QStyle::SP_FileIcon, "Copy Row as CSV", "CSV");
+    copyCsv->setAccessibleName(tr("Copy row as CSV"));
+    copyCsv->setWhatsThis(tr("Copy the currently selected row as CSV text to the clipboard"));
     auto* exportCsv = lith_ui::make_flat_icon_button("document-save-symbolic", QStyle::SP_DialogSaveButton, "Export as CSV");
+    exportCsv->setAccessibleName(tr("Export results as CSV"));
+    exportCsv->setWhatsThis(tr("Save the entire query result set as a CSV file"));
     status_label_ = new QLabel(this);
     status_label_->setObjectName("dimCaption");
     spinner_ = new QProgressBar(this);

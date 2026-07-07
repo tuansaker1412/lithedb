@@ -10,6 +10,7 @@
 #include <QDialogButtonBox>
 #include <QFrame>
 #include <QGridLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -31,7 +32,7 @@
 namespace lith_dialogs {
 namespace {
 
-QScrollArea* create_form_scroll_area(QDialog& dialog, QGridLayout*& form)
+QScrollArea* create_form_scroll_area(QDialog& dialog, QVBoxLayout*& panelLayout)
 {
     auto* scrollArea = new QScrollArea(&dialog);
     scrollArea->setWidgetResizable(true);
@@ -44,14 +45,9 @@ QScrollArea* create_form_scroll_area(QDialog& dialog, QGridLayout*& form)
 
     auto* panel = new QWidget(container);
     panel->setObjectName("dialogCard");
-    auto* panelLayout = new QVBoxLayout(panel);
+    panelLayout = new QVBoxLayout(panel);
     panelLayout->setContentsMargins(16, 16, 16, 16);
-    panelLayout->setSpacing(0);
-
-    form = new QGridLayout;
-    form->setHorizontalSpacing(12);
-    form->setVerticalSpacing(12);
-    panelLayout->addLayout(form);
+    panelLayout->setSpacing(12);
 
     containerLayout->addWidget(panel);
     containerLayout->addStretch(1);
@@ -387,12 +383,57 @@ std::optional<RowEditorResult> show_row_editor_dialog(QWidget* parent, const Row
     introLabel->setObjectName("placeholderDescription");
     introLabel->setWordWrap(true);
     layout->addWidget(introLabel);
-    QGridLayout* form = nullptr;
-    auto* scrollArea = create_form_scroll_area(dialog, form);
+    QVBoxLayout* panelLayout = nullptr;
+    auto* scrollArea = create_form_scroll_area(dialog, panelLayout);
     scrollArea->setMinimumHeight(420);
     auto* errorLabel = new QLabel(&dialog);
     errorLabel->setObjectName("dimCaption");
     errorLabel->setProperty("statusTone", "error");
+
+    bool has_pk = false;
+    bool has_auto_gen = false;
+    bool has_editable = false;
+    for (int i = 0; i < request.structure_model->rowCount(); ++i) {
+        const bool pk = request.structure_model->item(i, 4)->text() == "PK";
+        const bool ai = request.structure_model->item(i, 5)->text() == "Yes";
+        if (pk) has_pk = true;
+        else if (ai) has_auto_gen = true;
+        else has_editable = true;
+    }
+
+    QGridLayout* pkForm = nullptr;
+    if (has_pk) {
+        auto* pkGroup = new QGroupBox(QObject::tr("Primary Key Fields"));
+        pkGroup->setAccessibleName(QObject::tr("Primary Key Fields"));
+        pkForm = new QGridLayout(pkGroup);
+        pkForm->setHorizontalSpacing(12);
+        pkForm->setVerticalSpacing(12);
+        panelLayout->addWidget(pkGroup);
+    }
+
+    QGridLayout* autoGenForm = nullptr;
+    if (has_auto_gen) {
+        auto* autoGenGroup = new QGroupBox(QObject::tr("Auto-generated Fields"));
+        autoGenGroup->setAccessibleName(QObject::tr("Auto-generated Fields"));
+        autoGenForm = new QGridLayout(autoGenGroup);
+        autoGenForm->setHorizontalSpacing(12);
+        autoGenForm->setVerticalSpacing(12);
+        panelLayout->addWidget(autoGenGroup);
+    }
+
+    QGridLayout* editableForm = nullptr;
+    if (has_editable) {
+        auto* editableGroup = new QGroupBox(QObject::tr("Editable Fields"));
+        editableGroup->setAccessibleName(QObject::tr("Editable Fields"));
+        editableForm = new QGridLayout(editableGroup);
+        editableForm->setHorizontalSpacing(12);
+        editableForm->setVerticalSpacing(12);
+        panelLayout->addWidget(editableGroup);
+    }
+
+    int pkGridRow = 0;
+    int autoGenGridRow = 0;
+    int editableGridRow = 0;
 
     for (int row = 0; row < request.structure_model->rowCount(); ++row) {
         const auto columnName = request.structure_model->item(row, 1)->text();
@@ -422,6 +463,10 @@ std::optional<RowEditorResult> show_row_editor_dialog(QWidget* parent, const Row
         fieldLayout->setSpacing(6);
         auto* edit = new QLineEdit(&dialog);
         edit->setObjectName(QString("field_%1").arg(row));
+        edit->setAccessibleName(columnName);
+        edit->setWhatsThis(QObject::tr("Value for column %1 (%2)").arg(columnName, dataType));
+        edit->setAccessibleName(columnName);
+        edit->setWhatsThis(QObject::tr("Value for column %1 (%2)").arg(columnName, dataType));
         if (request.result_model && request.selected_row >= 0) {
             const auto* existingItem = lith_table::result_item_for_column(
                 request.result_model,
@@ -520,14 +565,28 @@ std::optional<RowEditorResult> show_row_editor_dialog(QWidget* parent, const Row
         fieldLayout->addWidget(edit);
         fieldLayout->addWidget(actions);
 
-        form->addWidget(labelBox, row, 0);
-        form->addWidget(fieldBox, row, 1);
+        QGridLayout* targetForm = nullptr;
+        int targetRow = 0;
+        if (primaryKey) {
+            targetForm = pkForm;
+            targetRow = pkGridRow++;
+        } else if (autoIncrement) {
+            targetForm = autoGenForm;
+            targetRow = autoGenGridRow++;
+        } else {
+            targetForm = editableForm;
+            targetRow = editableGridRow++;
+        }
+        targetForm->addWidget(labelBox, targetRow, 0);
+        targetForm->addWidget(fieldBox, targetRow, 1);
     }
 
     layout->addWidget(scrollArea, 1);
     layout->addWidget(errorLabel);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     buttons->button(QDialogButtonBox::Ok)->setObjectName("accentPillButton");
+    buttons->button(QDialogButtonBox::Ok)->setAccessibleName(QObject::tr("Save changes"));
+    buttons->button(QDialogButtonBox::Cancel)->setAccessibleName(QObject::tr("Cancel and close dialog"));
     layout->addWidget(buttons);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);

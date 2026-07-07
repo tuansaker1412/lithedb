@@ -5,6 +5,7 @@
 #include <QDialogButtonBox>
 #include <QGridLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 ShortcutsDialog::ShortcutsDialog(QWidget* parent)
@@ -46,8 +47,10 @@ ShortcutsDialog::ShortcutsDialog(QWidget* parent)
     for (const auto& entry : shortcuts) {
         auto* key = new QLabel(QString::fromLatin1(entry.key), card);
         key->setObjectName("shortcutKey");
+        key->setAccessibleName(QString::fromLatin1(entry.key));
         auto* desc = new QLabel(QString::fromLatin1(entry.label), card);
         desc->setObjectName("dimCaption");
+        desc->setAccessibleName(QString::fromLatin1(entry.label));
         const int row = grid->rowCount();
         grid->addWidget(key, row, 0, Qt::AlignLeft);
         grid->addWidget(desc, row, 1);
@@ -56,6 +59,7 @@ ShortcutsDialog::ShortcutsDialog(QWidget* parent)
     layout->addWidget(card);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    buttons->button(QDialogButtonBox::Close)->setAccessibleName(tr("Close shortcuts dialog"));
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(buttons);
 }

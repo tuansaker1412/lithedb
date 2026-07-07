@@ -181,11 +181,15 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
 
     auto* nameEdit = new QLineEdit(initial.value("name").toString());
     nameEdit->setPlaceholderText("Production PostgreSQL");
+    nameEdit->setAccessibleName(QObject::tr("Connection name"));
+    nameEdit->setWhatsThis(QObject::tr("A friendly name to identify this connection, e.g. 'Production PostgreSQL' or 'Local MySQL'"));
     auto* driverCombo = new QComboBox;
     driverCombo->addItem("PostgreSQL");
     driverCombo->addItem("MySQL");
     driverCombo->addItem("SQLite");
     driverCombo->setCurrentText(driver_display_name(initial.value("driver").toString("PostgreSQL")));
+    driverCombo->setAccessibleName(QObject::tr("Database driver"));
+    driverCombo->setWhatsThis(QObject::tr("Choose the database engine: PostgreSQL, MySQL, or SQLite"));
 
     add_info_row(0, "Name", nameEdit);
     add_info_row(1, "Driver", driverCombo);
@@ -209,16 +213,28 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
 
     auto* hostEdit = new QLineEdit(initial.value("host").toString());
     hostEdit->setPlaceholderText("localhost");
+    hostEdit->setAccessibleName(QObject::tr("Host"));
+    hostEdit->setWhatsThis(QObject::tr("Hostname or IP address of the database server, e.g. 'localhost' or '192.168.1.100'"));
     auto* portSpin = new QSpinBox;
     portSpin->setRange(1, 65535);
     portSpin->setValue(initial.value("port").toInt(default_port_for_driver(driverCombo->currentText())));
+    portSpin->setAccessibleName(QObject::tr("Port"));
+    portSpin->setWhatsThis(QObject::tr("TCP port number for the database server. Default: 5432 for PostgreSQL, 3306 for MySQL"));
     auto* usernameEdit = new QLineEdit(initial.value("username").toString());
     usernameEdit->setPlaceholderText("postgres");
+    usernameEdit->setAccessibleName(QObject::tr("Username"));
+    usernameEdit->setWhatsThis(QObject::tr("Database user account for authentication"));
     auto* passwordEdit = new QLineEdit;
     passwordEdit->setEchoMode(QLineEdit::Password);
     passwordEdit->setPlaceholderText(isEdit ? "Leave blank to keep the current password" : "Required if your server needs one");
+    passwordEdit->setAccessibleName(QObject::tr("Password"));
+    passwordEdit->setWhatsThis(QObject::tr("Password for the database user. Stored securely in the system keyring"));
     auto* databaseEdit = new QLineEdit(initial.value("database").toString());
+    databaseEdit->setAccessibleName(QObject::tr("Database"));
+    databaseEdit->setWhatsThis(QObject::tr("Name of the database to connect to. For SQLite, this is the file path"));
     auto* browseButton = new QPushButton("Browse...");
+    browseButton->setAccessibleName(QObject::tr("Browse for SQLite database file"));
+    browseButton->setWhatsThis(QObject::tr("Open a file dialog to choose a SQLite database file"));
     auto* databaseField = new QWidget;
     auto* databaseFieldLayout = new QHBoxLayout(databaseField);
     databaseFieldLayout->setContentsMargins(0, 0, 0, 0);
@@ -227,6 +243,8 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
     databaseFieldLayout->addWidget(browseButton);
     auto* sslCheck = new QCheckBox("Require SSL");
     sslCheck->setChecked(initial.value("ssl").toBool(false));
+    sslCheck->setAccessibleName(QObject::tr("Require SSL"));
+    sslCheck->setWhatsThis(QObject::tr("Enable SSL/TLS encryption for the connection to the database server"));
     auto* helperLabel = new QLabel;
     helperLabel->setWordWrap(true);
     helperLabel->setObjectName("dimCaption");
@@ -278,7 +296,12 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
     auto* testButton = buttons->addButton("Test", QDialogButtonBox::ActionRole);
     auto* saveButton = buttons->button(QDialogButtonBox::Save);
     testButton->setObjectName("pillButton");
+    testButton->setAccessibleName(QObject::tr("Test connection"));
+    testButton->setWhatsThis(QObject::tr("Verify the connection settings by attempting to connect to the database"));
     saveButton->setObjectName("accentPillButton");
+    saveButton->setAccessibleName(QObject::tr("Save connection"));
+    saveButton->setWhatsThis(QObject::tr("Save the connection details and close the dialog"));
+    buttons->button(QDialogButtonBox::Cancel)->setAccessibleName(QObject::tr("Cancel"));
     layout->addWidget(buttons);
 
     quint16 lastNetworkPort = static_cast<quint16>(portSpin->value());

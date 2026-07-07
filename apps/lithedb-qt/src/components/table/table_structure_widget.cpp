@@ -3,6 +3,7 @@
 #include "../../ui_helpers.h"
 
 #include <QAbstractItemView>
+#include <QGroupBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -33,6 +34,10 @@ TableStructureWidget::TableStructureWidget(QWidget* parent)
         QStyle::SP_BrowserReload,
         "Reload structure from database"
     );
+    reload->setAccessibleName(tr("Reload structure"));
+    reload->setWhatsThis(tr("Reload the table structure from the database"));
+    reload->setAccessibleName(tr("Reload structure"));
+    reload->setWhatsThis(tr("Reload the table structure from the database"));
     status_label_ = new QLabel("Structure loaded", this);
     status_label_->setObjectName("dimCaption");
     spinner_ = new QProgressBar(this);
@@ -59,6 +64,10 @@ TableStructureWidget::TableStructureWidget(QWidget* parent)
     columns_grid_->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     columns_grid_->setMinimumHeight(280);
     columns_grid_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    columns_grid_->setAccessibleName(tr("Table columns"));
+    columns_grid_->setWhatsThis(tr("Lists all columns in this table with their data types, nullability, and constraints"));
+    columns_grid_->setAccessibleName(tr("Table columns"));
+    columns_grid_->setWhatsThis(tr("Lists all columns in this table with their data types, nullability, and constraints"));
 
     auto* fkTitle = new QLabel("Foreign Keys", this);
     fkTitle->setObjectName("sectionTitle");
@@ -72,6 +81,10 @@ TableStructureWidget::TableStructureWidget(QWidget* parent)
     foreignKeyGrid->setSelectionMode(QAbstractItemView::SingleSelection);
     foreignKeyGrid->setShowGrid(false);
     foreignKeyGrid->setMinimumHeight(140);
+    foreignKeyGrid->setAccessibleName(tr("Foreign keys"));
+    foreignKeyGrid->setWhatsThis(tr("Lists foreign key constraints defined on this table"));
+    foreignKeyGrid->setAccessibleName(tr("Foreign keys"));
+    foreignKeyGrid->setWhatsThis(tr("Lists foreign key constraints defined on this table"));
     foreign_key_stack_ = new QStackedWidget(this);
     foreign_key_stack_->addWidget(lith_ui::make_loading_state("Loading foreign keys", "Resolving relationships for the active table."));
     foreign_key_stack_->addWidget(
@@ -97,6 +110,10 @@ TableStructureWidget::TableStructureWidget(QWidget* parent)
     indexGrid->setSelectionMode(QAbstractItemView::SingleSelection);
     indexGrid->setShowGrid(false);
     indexGrid->setMinimumHeight(140);
+    indexGrid->setAccessibleName(tr("Indexes"));
+    indexGrid->setWhatsThis(tr("Lists indexes defined on this table"));
+    indexGrid->setAccessibleName(tr("Indexes"));
+    indexGrid->setWhatsThis(tr("Lists indexes defined on this table"));
     index_stack_ = new QStackedWidget(this);
     index_stack_->addWidget(lith_ui::make_loading_state("Loading indexes", "Inspecting primary and secondary indexes."));
     index_stack_->addWidget(

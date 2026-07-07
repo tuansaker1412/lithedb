@@ -43,8 +43,14 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     toolbarActionsRow->setSpacing(8);
 
     auto* reload = lith_ui::make_flat_icon_button("view-refresh-symbolic", QStyle::SP_BrowserReload, "Reload from database (F5)");
+    reload->setAccessibleName(tr("Reload data"));
+    reload->setWhatsThis(tr("Reload the table data from the database. Shortcut: F5"));
     prev_button_ = lith_ui::make_flat_icon_button("go-previous-symbolic", QStyle::SP_ArrowBack, "Previous Page");
+    prev_button_->setAccessibleName(tr("Previous page"));
+    prev_button_->setWhatsThis(tr("Navigate to the previous page of rows"));
     next_button_ = lith_ui::make_flat_icon_button("go-next-symbolic", QStyle::SP_ArrowForward, "Next Page");
+    next_button_->setAccessibleName(tr("Next page"));
+    next_button_->setWhatsThis(tr("Navigate to the next page of rows"));
     prev_button_->setEnabled(false);
     next_button_->setEnabled(false);
 
@@ -93,13 +99,29 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     sortSectionLayout->addWidget(sortButton);
 
     auto* add = lith_ui::make_flat_icon_button("list-add-symbolic", QStyle::SP_FileDialogNewFolder, "Add Row");
+    add->setAccessibleName(tr("Add row"));
+    add->setWhatsThis(tr("Insert a new row into the table"));
     auto* edit = lith_ui::make_flat_icon_button("document-edit-symbolic", QStyle::SP_FileDialogDetailedView, "Edit Selected Row");
+    edit->setAccessibleName(tr("Edit row"));
+    edit->setWhatsThis(tr("Edit the currently selected row"));
     auto* duplicate = lith_ui::make_flat_icon_button("edit-copy-symbolic", QStyle::SP_FileDialogContentsView, "Duplicate Selected Row");
+    duplicate->setAccessibleName(tr("Duplicate row"));
+    duplicate->setWhatsThis(tr("Create a copy of the selected row as a new row"));
     auto* remove = lith_ui::make_flat_icon_button("user-trash-symbolic", QStyle::SP_TrashIcon, "Delete Selected Row");
+    remove->setAccessibleName(tr("Delete row"));
+    remove->setWhatsThis(tr("Delete the currently selected row from the table"));
     auto* copyCell = lith_ui::make_flat_icon_button("edit-copy-symbolic", QStyle::SP_FileDialogContentsView, "Copy Cell");
+    copyCell->setAccessibleName(tr("Copy cell value"));
+    copyCell->setWhatsThis(tr("Copy the value of the currently selected cell to the clipboard"));
     auto* copyJson = lith_ui::make_flat_icon_button("text-x-script-symbolic", QStyle::SP_FileIcon, "Copy Row as JSON", "JSON");
+    copyJson->setAccessibleName(tr("Copy row as JSON"));
+    copyJson->setWhatsThis(tr("Copy the currently selected row as a JSON object to the clipboard"));
     auto* copyCsv = lith_ui::make_flat_icon_button("text-csv-symbolic", QStyle::SP_FileIcon, "Copy Row as CSV", "CSV");
+    copyCsv->setAccessibleName(tr("Copy row as CSV"));
+    copyCsv->setWhatsThis(tr("Copy the currently selected row as CSV text to the clipboard"));
     auto* exportCsv = lith_ui::make_flat_icon_button("document-save-symbolic", QStyle::SP_DialogSaveButton, "Export as CSV");
+    exportCsv->setAccessibleName(tr("Export as CSV"));
+    exportCsv->setWhatsThis(tr("Save the entire table data as a CSV file"));
 
     status_label_ = new QLabel("No data loaded", this);
     status_label_->setObjectName("dimCaption");
