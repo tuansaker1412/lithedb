@@ -35,6 +35,11 @@
 using namespace lith_mainwindow;
 using namespace lith_models;
 
+bool MainWindow::is_connected(const QString& connectionId) const
+{
+    return connected_connection_ids_.contains(connectionId);
+}
+
 void MainWindow::seed_sidebar()
 {
     connection_model_ = sidebar_->model();
@@ -57,7 +62,7 @@ void MainWindow::seed_sidebar()
             return;
         }
         if (item->data(RoleKind).toString() == "connection"
-            && item->data(RoleConnectionId).toString() != connected_connection_id_) {
+            && !connected_connection_ids_.contains(item->data(RoleConnectionId).toString())) {
             connect_selected_connection();
         }
     });
@@ -119,7 +124,7 @@ void MainWindow::refresh_connection_buttons()
     const auto* item = selected_connection_item();
     const auto selectedConnectionId = item ? item->data(RoleConnectionId).toString() : QString();
     const bool hasSelection = !selectedConnectionId.isEmpty();
-    const bool isActive = hasSelection && selectedConnectionId == connected_connection_id_;
+    const bool isActive = hasSelection && connected_connection_ids_.contains(selectedConnectionId);
 
     sidebar_->set_connection_actions_enabled(hasSelection, isActive);
 }
@@ -158,7 +163,7 @@ void MainWindow::open_connection_dialog(const QString& connectionId)
         return;
     }
 
-    const bool wasActive = !connectionId.isEmpty() && connectionId == connected_connection_id_;
+    const bool wasActive = !connectionId.isEmpty() && connected_connection_ids_.contains(connectionId);
     if (wasActive) {
         disconnect_active_connection();
         close_tabs_for_connection(connectionId);
@@ -210,7 +215,7 @@ void MainWindow::delete_selected_connection()
             return;
         }
 
-        if (connectionId == connected_connection_id_) {
+        if (connected_connection_ids_.contains(connectionId)) {
             disconnect_active_connection();
         }
         close_tabs_for_connection(connectionId);
@@ -314,7 +319,7 @@ void MainWindow::refresh_query_database_dropdowns()
         const auto previousDatabase = databaseCombo->currentText();
         const QSignalBlocker blocker(*databaseCombo);
         databaseCombo->clear();
-        const bool enabled = !connected_connection_id_.isEmpty() && selectedConnectionId == connected_connection_id_;
+        const bool enabled = !connected_connection_ids_.isEmpty() && connected_connection_ids_.contains(selectedConnectionId);
         databaseCombo->setEnabled(enabled);
         if (!enabled) {
             databaseCombo->addItem("Connect first");
@@ -324,7 +329,7 @@ void MainWindow::refresh_query_database_dropdowns()
         QList<QString> databaseNames;
         for (int row = 0; row < connection_model_->rowCount(); ++row) {
             auto* connectionItem = connection_model_->item(row);
-            if (!connectionItem || connectionItem->data(RoleConnectionId).toString() != connected_connection_id_) {
+            if (!connectionItem || connectionItem->data(RoleConnectionId).toString() != selectedConnectionId) {
                 continue;
             }
             for (int childRow = 0; childRow < connectionItem->rowCount(); ++childRow) {
@@ -367,19 +372,13 @@ void MainWindow::connect_selected_connection()
         return;
     }
 
-    for (int row = 0; row < connection_model_->rowCount(); ++row) {
-        auto* connectionItem = connection_model_->item(row);
-        if (!connectionItem) {
-            continue;
-        }
-        const auto itemConnectionId = connectionItem->data(RoleConnectionId).toString();
-        connectionItem->setText(connectionItem->data(RoleBaseName).toString());
-        lith_mainwindow::apply_connection_status_icon(connectionItem, itemConnectionId == connectionId);
-        if (itemConnectionId != connectionId) {
-            connectionItem->removeRows(0, connectionItem->rowCount());
-        }
+    if (connected_connection_ids_.contains(connectionId)) {
+        status_label_->setText(QString("%1 is already connected").arg(item->data(RoleBaseName).toString()));
+        return;
     }
-    connected_connection_id_ = connectionId;
+
+    lith_mainwindow::apply_connection_status_icon(item, true);
+    connected_connection_ids_.insert(connectionId);
     refresh_query_database_dropdowns();
     refresh_connection_buttons();
     status_label_->setText(QString("Connecting to %1...").arg(item->data(RoleBaseName).toString()));
@@ -388,26 +387,42 @@ void MainWindow::connect_selected_connection()
 
 void MainWindow::disconnect_active_connection()
 {
-    connected_connection_id_.clear();
-    current_connection_id_.clear();
-    current_connection_driver_.clear();
-    current_database_.clear();
-    current_table_.clear();
-
-    for (int row = 0; row < connection_model_->rowCount(); ++row) {
-        auto* connectionItem = connection_model_->item(row);
-        if (!connectionItem) {
-            continue;
-        }
-        connectionItem->setText(connectionItem->data(RoleBaseName).toString());
-        lith_mainwindow::apply_connection_status_icon(connectionItem, false);
-        connectionItem->removeRows(0, connectionItem->rowCount());
+    auto* item = selected_connection_item();
+    if (!item) {
+        status_label_->setText("Select a connection to disconnect");
+        return;
     }
-    sidebar_->tree_view()->collapseAll();
+
+    const auto connectionId = item->data(RoleConnectionId).toString();
+    if (!connected_connection_ids_.contains(connectionId)) {
+        status_label_->setText("This connection is not connected");
+        return;
+    }
+
+    connected_connection_ids_.remove(connectionId);
+    close_tabs_for_connection(connectionId);
+
+    if (current_connection_id_ == connectionId) {
+        current_connection_id_.clear();
+        current_connection_driver_.clear();
+        current_database_.clear();
+        current_table_.clear();
+    }
+
+    item->setText(item->data(RoleBaseName).toString());
+    lith_mainwindow::apply_connection_status_icon(item, false);
+    item->removeRows(0, item->rowCount());
+
+    if (connected_connection_ids_.isEmpty()) {
+        sidebar_->tree_view()->collapseAll();
+        setWindowTitle("LitheDB");
+        status_label_->setText("Disconnected");
+    } else {
+        status_label_->setText(QString("Disconnected from %1").arg(item->data(RoleBaseName).toString()));
+    }
+
     refresh_query_database_dropdowns();
     refresh_connection_buttons();
-    setWindowTitle("LitheDB");
-    status_label_->setText("Disconnected");
 }
 
 void MainWindow::close_tabs_for_connection(const QString& connectionId)
@@ -464,14 +479,14 @@ void MainWindow::load_schema_for_connection(const QString& connectionId)
         schemaProcess->setProperty("timedOut", true);
         schemaProcess->kill();
     });
-    connect(schemaProcess, &QProcess::finished, this, [this, schemaProcess, timeoutTimer, connectionItem](int exitCode, QProcess::ExitStatus exitStatus) {
+    connect(schemaProcess, &QProcess::finished, this, [this, schemaProcess, timeoutTimer, connectionItem, connectionId](int exitCode, QProcess::ExitStatus exitStatus) {
         const auto out = schemaProcess->readAllStandardOutput();
         const auto err = schemaProcess->readAllStandardError();
         const bool timedOut = schemaProcess->property("timedOut").toBool();
         timeoutTimer->stop();
         schemaProcess->deleteLater();
         if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-            connected_connection_id_.clear();
+            connected_connection_ids_.remove(connectionId);
             connectionItem->setText(connectionItem->data(RoleBaseName).toString());
             lith_mainwindow::apply_connection_status_icon(connectionItem, false);
             status_label_->setText("Connect failed");
@@ -490,7 +505,7 @@ void MainWindow::load_schema_for_connection(const QString& connectionId)
 
         const auto schemaDoc = QJsonDocument::fromJson(out);
         if (!schemaDoc.isArray()) {
-            connected_connection_id_.clear();
+            connected_connection_ids_.remove(connectionId);
             connectionItem->setText(connectionItem->data(RoleBaseName).toString());
             lith_mainwindow::apply_connection_status_icon(connectionItem, false);
             status_label_->setText("Invalid schema payload");
@@ -540,7 +555,7 @@ void MainWindow::load_schema_for_connection(const QString& connectionId)
 
 void MainWindow::create_database_dialog(const QString& connectionId)
 {
-    if (connected_connection_id_.isEmpty()) {
+    if (connected_connection_ids_.isEmpty()) {
         QMessageBox::information(this, "No Active Connection",
             "Please connect to a database server first.");
         return;
@@ -551,9 +566,9 @@ void MainWindow::create_database_dialog(const QString& connectionId)
         return;
     }
 
-    // If connectionId is provided and matches the connected connection, use it
-    QString targetConnectionId = connected_connection_id_;
-    if (!connectionId.isEmpty() && connectionId == connected_connection_id_) {
+    // If connectionId is provided and matches a connected connection, use it
+    QString targetConnectionId = connected_connection_ids_.isEmpty() ? QString() : *connected_connection_ids_.begin();
+    if (!connectionId.isEmpty() && connected_connection_ids_.contains(connectionId)) {
         targetConnectionId = connectionId;
     }
 
@@ -594,7 +609,7 @@ void MainWindow::create_database_dialog(const QString& connectionId)
 
 void MainWindow::drop_database_dialog(const QString& connectionId, const QString& databaseName)
 {
-    if (connected_connection_id_.isEmpty()) {
+    if (connected_connection_ids_.isEmpty()) {
         QMessageBox::information(this, "No Active Connection",
             "Please connect to a database server first.");
         return;
@@ -635,9 +650,9 @@ void MainWindow::drop_database_dialog(const QString& connectionId, const QString
         return;
     }
 
-    // Use provided connectionId if valid, otherwise use connected_connection_id_
-    QString targetConnectionId = connected_connection_id_;
-    if (!connectionId.isEmpty() && connectionId == connected_connection_id_) {
+    // Use provided connectionId if valid, otherwise use the first connected connection
+    QString targetConnectionId = connected_connection_ids_.isEmpty() ? QString() : *connected_connection_ids_.begin();
+    if (!connectionId.isEmpty() && connected_connection_ids_.contains(connectionId)) {
         targetConnectionId = connectionId;
     }
 

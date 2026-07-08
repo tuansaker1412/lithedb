@@ -3,6 +3,7 @@
 #include "models/query_tab_state.h"
 
 #include <QMainWindow>
+#include <QSet>
 #include <QString>
 #include <vector>
 
@@ -109,6 +110,7 @@ private:
     void begin_inline_edit(TablePageWidget* tablePage, int row);
     void commit_inline_edit(TablePageWidget* tablePage, int row);
     QString bridge_binary_path() const;
+    bool is_connected(const QString& connectionId) const;
 
     QToolBar* toolbar_ = nullptr;
     QSplitter* main_splitter_ = nullptr;
@@ -127,7 +129,7 @@ private:
     QStandardItemModel* connection_model_ = nullptr;
     QString current_connection_id_;
     QString current_connection_driver_;
-    QString connected_connection_id_;
+    QSet<QString> connected_connection_ids_;
     QString current_database_;
     QString current_table_;
     quint64 current_table_page_ = 0;

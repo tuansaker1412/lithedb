@@ -583,13 +583,13 @@ void MainWindow::seed_data_tabs()
 
 void MainWindow::refresh_schema()
 {
-    if (connected_connection_id_.isEmpty()) {
+    if (connected_connection_ids_.isEmpty()) {
         load_connections();
         status_label_->setText("Connections refreshed. Select one and click Connect.");
         return;
     }
 
-    load_schema_for_connection(connected_connection_id_);
+    load_schema_for_connection(*connected_connection_ids_.begin());
 }
 
 void MainWindow::show_preferences_dialog()

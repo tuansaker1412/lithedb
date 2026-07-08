@@ -150,7 +150,7 @@ void MainWindow::execute_query_for_page(QWidget* page)
         tab->status_label()->setText(message);
         return;
     }
-    if (connected_connection_id_.isEmpty() || connectionId != connected_connection_id_) {
+    if (connected_connection_ids_.isEmpty() || !connected_connection_ids_.contains(connectionId)) {
         status_label_->setText("Connect the selected connection first");
         tab->status_label()->setText("Connect the selected connection first");
         return;
