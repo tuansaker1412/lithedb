@@ -1,14 +1,22 @@
 #include "table_data_widget.h"
 
+#include "inline_edit_delegate.h"
+#include "../../table_model_utils.h"
+#include "../../theme.h"
 #include "../../ui_helpers.h"
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QApplication>
+#include <QBrush>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QEvent>
 #include <QFrame>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -20,7 +28,6 @@
 #include <QTableView>
 #include <QToolButton>
 #include <QVBoxLayout>
-#include <QItemSelectionModel>
 
 TableDataWidget::TableDataWidget(QWidget* parent)
     : QWidget(parent)
@@ -152,13 +159,39 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     toolbarActionsRow->addWidget(exportCsv);
     toolbarActionsRow->addStretch(1);
 
+    save_button_ = new QToolButton(this);
+    save_button_->setText("Save");
+    save_button_->setIcon(lith_ui::themed_icon("document-save-symbolic", QStyle::SP_DialogSaveButton));
+    save_button_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    save_button_->setObjectName("accentPillButton");
+    save_button_->setAccessibleName(tr("Save inline edits"));
+    save_button_->setWhatsThis(tr("Commit the changes made on the highlighted row back to the database"));
+    save_button_->setToolTip("Save changes to the database (only changed cells are written)");
+    save_button_->hide();
+
+    cancel_button_ = new QToolButton(this);
+    cancel_button_->setText("Cancel");
+    cancel_button_->setIcon(lith_ui::themed_icon("dialog-cancel-symbolic", QStyle::SP_DialogCancelButton));
+    cancel_button_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    cancel_button_->setObjectName("pillButton");
+    cancel_button_->setAccessibleName(tr("Cancel inline edits"));
+    cancel_button_->setWhatsThis(tr("Discard changes on the highlighted row and exit inline editing"));
+    cancel_button_->setToolTip("Discard changes and exit editing");
+    cancel_button_->hide();
+
+    toolbarActionsRow->addWidget(cancel_button_);
+    toolbarActionsRow->addWidget(save_button_);
+
     toolbarLayout->addLayout(toolbarTopRow);
     toolbarLayout->addLayout(toolbarSortRow);
     toolbarLayout->addLayout(toolbarActionsRow);
 
     model_ = new QStandardItemModel(this);
     grid_ = new QTableView(this);
+    grid_->setObjectName("tableDataGrid");
     grid_->setModel(model_);
+    delegate_ = new InlineEditDelegate(grid_);
+    grid_->setItemDelegate(delegate_);
     grid_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     grid_->horizontalHeader()->setStretchLastSection(true);
     grid_->horizontalHeader()->setMinimumSectionSize(96);
@@ -174,7 +207,8 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     grid_->setSortingEnabled(false);
     grid_->setContextMenuPolicy(Qt::CustomContextMenu);
     grid_->setAccessibleName(tr("Table data grid"));
-    grid_->setWhatsThis(tr("Displays rows from the selected table. Use toolbar buttons or right-click for Edit, Duplicate, and Delete operations. Click column headers to sort."));
+    grid_->setWhatsThis(tr("Displays rows from the selected table. Double-click a cell to edit it inline on that row, then Save or Cancel. Use toolbar buttons or right-click for Edit, Duplicate, and Delete operations."));
+    grid_->viewport()->installEventFilter(this);
 
     stack_ = new QStackedWidget(this);
     stack_->addWidget(lith_ui::make_loading_state("Loading table rows", "Fetching the current page and keeping the window responsive."));
@@ -221,7 +255,63 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     connect(copyJson, &QToolButton::clicked, this, &TableDataWidget::copyRowJsonRequested);
     connect(copyCsv, &QToolButton::clicked, this, &TableDataWidget::copyRowCsvRequested);
     connect(exportCsv, &QToolButton::clicked, this, &TableDataWidget::exportCsvRequested);
-    connect(grid_, &QTableView::doubleClicked, this, &TableDataWidget::openCellRequested);
+    connect(grid_, &QTableView::doubleClicked, this, [this](const QModelIndex& index) {
+        if (editing_row_ >= 0 && editing_row_ != index.row()) {
+            exit_edit_mode(false);
+            emit inlineEditEnterRequested(index);
+            return;
+        }
+        if (editing_row_ < 0) {
+            // Non-editable cells (PK / auto-increment / binary) still open the
+            // value viewer instead of entering inline edit mode.
+            if (!cell_is_editable(index.row(), index.column())) {
+                emit openCellRequested(index);
+                return;
+            }
+            emit inlineEditEnterRequested(index);
+            return;
+        }
+        // Already editing the same row: editable cells let the default editor
+        // open; non-editable cells open the value viewer.
+        if (!cell_is_editable(index.row(), index.column())) {
+            emit openCellRequested(index);
+        }
+    });
+    connect(save_button_, &QToolButton::clicked, this, [this]() {
+        if (editing_row_ >= 0) {
+            commit_current_editor();
+            emit inlineEditSaveRequested(editing_row_);
+        }
+    });
+    connect(cancel_button_, &QToolButton::clicked, this, [this]() {
+        if (editing_row_ >= 0) {
+            commit_current_editor();
+            emit inlineEditCancelRequested(editing_row_);
+        }
+    });
+    connect(model_, &QStandardItemModel::dataChanged, this, [this](const QModelIndex& topLeft, const QModelIndex& bottomRight) {
+        if (editing_row_ < 0) {
+            return;
+        }
+        for (int row = topLeft.row(); row <= bottomRight.row(); ++row) {
+            if (row != editing_row_) {
+                continue;
+            }
+            for (int column = topLeft.column(); column <= bottomRight.column(); ++column) {
+                mark_cell_dirty(model_->index(row, column));
+            }
+        }
+        update_save_cancel_visibility();
+    });
+    connect(model_, &QStandardItemModel::modelAboutToBeReset, this, [this]() {
+        if (editing_row_ >= 0) {
+            editing_row_ = -1;
+            if (delegate_) {
+                delegate_->set_editing_row(-1);
+            }
+            update_save_cancel_visibility();
+        }
+    });
     connect(grid_, &QTableView::customContextMenuRequested, this, [this](const QPoint& pos) {
         const auto index = grid_->indexAt(pos);
         if (!index.isValid()) {
@@ -269,3 +359,230 @@ QLabel* TableDataWidget::status_label() const { return status_label_; }
 QProgressBar* TableDataWidget::spinner() const { return spinner_; }
 QStackedWidget* TableDataWidget::stack() const { return stack_; }
 QComboBox* TableDataWidget::page_size_combo() const { return page_size_combo_; }
+
+void TableDataWidget::set_structure_model(QStandardItemModel* structureModel)
+{
+    structure_model_ = structureModel;
+}
+
+void TableDataWidget::set_driver(const QString& driver)
+{
+    driver_ = driver;
+}
+
+bool TableDataWidget::is_editing() const
+{
+    return editing_row_ >= 0;
+}
+
+int TableDataWidget::editing_row() const
+{
+    return editing_row_;
+}
+
+void TableDataWidget::commit_current_editor()
+{
+    // Commit any open cell editor so its typed value is written into the model
+    // before save/cancel inspects the model. Without this the last keystrokes
+    // in a cell being edited would be lost when clicking Save.
+    //
+    // commitData/closeEditor are protected on QAbstractItemView, so we move
+    // focus back to the grid viewport: Qt commits the editor and writes the
+    // value into the model automatically when the editor loses focus.
+    if (!grid_) {
+        return;
+    }
+    if (auto* editor = grid_->viewport()->focusWidget()) {
+        grid_->setFocus();
+    } else if (auto* focusWidget = QApplication::focusWidget()) {
+        focusWidget->clearFocus();
+    }
+}
+
+bool TableDataWidget::cell_is_editable(int row, int column) const
+{
+    if (!structure_model_ || row < 0 || column < 0) {
+        return false;
+    }
+    if (column >= structure_model_->rowCount()) {
+        return false;
+    }
+    return lith_table::column_is_inline_editable(structure_model_, column, driver_);
+}
+
+void TableDataWidget::enter_edit_mode(int row)
+{
+    if (!model_ || row < 0 || row >= model_->rowCount()) {
+        return;
+    }
+    if (editing_row_ == row) {
+        return;
+    }
+    if (editing_row_ >= 0) {
+        revert_row(editing_row_);
+    }
+
+    editing_row_ = row;
+    for (int column = 0; column < model_->columnCount(); ++column) {
+        auto* item = model_->item(row, column);
+        if (!item) {
+            continue;
+        }
+        item->setData(item->text(), lith_table::RoleCellOriginalValue);
+        item->setData(lith_table::item_is_null(item), lith_table::RoleCellOriginalIsNull);
+        item->setData(false, lith_table::RoleCellDirty);
+        item->setEditable(cell_is_editable(row, column));
+    }
+
+    if (delegate_) {
+        delegate_->set_editing_row(row);
+    }
+    grid_->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+    grid_->setSelectionBehavior(QAbstractItemView::SelectItems);
+    grid_->setSelectionMode(QAbstractItemView::SingleSelection);
+    if (grid_->selectionModel()) {
+        grid_->selectionModel()->clearSelection();
+    }
+    grid_->resizeRowToContents(row);
+    update_dirty_tooltips(row);
+    update_save_cancel_visibility();
+}
+
+void TableDataWidget::exit_edit_mode(bool save)
+{
+    if (editing_row_ < 0) {
+        return;
+    }
+    const int row = editing_row_;
+    editing_row_ = -1;
+
+    if (!save) {
+        revert_row(row);
+    }
+
+    if (delegate_) {
+        delegate_->set_editing_row(-1);
+    }
+    grid_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    grid_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    grid_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    for (int column = 0; column < model_->columnCount(); ++column) {
+        auto* item = model_->item(row, column);
+        if (!item) {
+            continue;
+        }
+        item->setEditable(false);
+        item->setData(false, lith_table::RoleCellDirty);
+        item->setToolTip(QString());
+    }
+    grid_->resizeRowToContents(row);
+    update_save_cancel_visibility();
+}
+
+void TableDataWidget::mark_cell_dirty(const QModelIndex& index)
+{
+    if (editing_row_ < 0 || index.row() != editing_row_) {
+        return;
+    }
+    auto* item = model_->item(index.row(), index.column());
+    if (!item) {
+        return;
+    }
+    const auto original = item->data(lith_table::RoleCellOriginalValue).toString();
+    const auto current = item->text();
+    item->setData(current != original, lith_table::RoleCellDirty);
+    if (current != original) {
+        item->setToolTip(tr("Original: %1").arg(original.isEmpty() ? "NULL" : original));
+    } else {
+        item->setToolTip(QString());
+    }
+}
+
+void TableDataWidget::revert_row(int row)
+{
+    if (!model_ || row < 0 || row >= model_->rowCount()) {
+        return;
+    }
+    for (int column = 0; column < model_->columnCount(); ++column) {
+        auto* item = model_->item(row, column);
+        if (!item) {
+            continue;
+        }
+        const auto original = item->data(lith_table::RoleCellOriginalValue).toString();
+        if (item->text() != original) {
+            item->setText(original);
+        }
+        item->setData(false, lith_table::RoleCellDirty);
+        item->setToolTip(QString());
+    }
+}
+
+void TableDataWidget::update_dirty_tooltips(int row)
+{
+    if (!model_ || row < 0) {
+        return;
+    }
+    for (int column = 0; column < model_->columnCount(); ++column) {
+        auto* item = model_->item(row, column);
+        if (!item) {
+            continue;
+        }
+        const auto original = item->data(lith_table::RoleCellOriginalValue).toString();
+        const auto current = item->text();
+        if (item->data(lith_table::RoleCellDirty).toBool() && current != original) {
+            item->setToolTip(tr("Original: %1").arg(original.isEmpty() ? "NULL" : original));
+        } else {
+            item->setToolTip(QString());
+        }
+    }
+}
+
+void TableDataWidget::update_save_cancel_visibility()
+{
+    const bool editing = editing_row_ >= 0;
+    save_button_->setVisible(editing);
+    cancel_button_->setVisible(editing);
+    int dirtyCount = 0;
+    if (editing && model_) {
+        for (int column = 0; column < model_->columnCount(); ++column) {
+            auto* item = model_->item(editing_row_, column);
+            if (item && item->data(lith_table::RoleCellDirty).toBool()) {
+                ++dirtyCount;
+            }
+        }
+    }
+    save_button_->setEnabled(editing && dirtyCount > 0);
+    if (status_label_ && editing) {
+        if (dirtyCount == 0) {
+            status_label_->setText(tr("Editing row %1 — no changes yet").arg(editing_row_ + 1));
+        } else {
+            status_label_->setText(
+                tr("Editing row %1 — %n changed cell(s)", "", dirtyCount).arg(editing_row_ + 1)
+            );
+        }
+    }
+}
+
+bool TableDataWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    // Keyboard shortcuts for inline editing: Enter/Return commits the current
+    // editor and saves; Escape cancels. Only active while inline editing.
+    if (watched == grid_->viewport() && event->type() == QEvent::KeyPress && editing_row_ >= 0) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            // Only intercept Enter when a cell editor is open (the editor is the
+            // viewport's focus widget); otherwise let the view handle navigation.
+            if (grid_->viewport()->focusWidget() != nullptr) {
+                commit_current_editor();
+                emit inlineEditSaveRequested(editing_row_);
+                return true;
+            }
+        } else if (keyEvent->key() == Qt::Key_Escape) {
+            commit_current_editor();
+            emit inlineEditCancelRequested(editing_row_);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}

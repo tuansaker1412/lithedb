@@ -53,6 +53,8 @@ qt_add_executable(lithedb-qt
     src/components/query/query_result_widget.h
     src/components/sidebar/connection_sidebar_widget.cpp
     src/components/sidebar/connection_sidebar_widget.h
+    src/components/table/inline_edit_delegate.cpp
+    src/components/table/inline_edit_delegate.h
     src/components/table/table_data_widget.cpp
     src/components/table/table_data_widget.h
     src/components/table/table_page_widget.cpp

@@ -302,6 +302,28 @@ QTableView:focus {
     border: 1px solid __LITHEDB_ACCENT_SOFT__;
 }
 
+/* Inline row editing in the table data grid */
+QTableView#tableDataGrid {
+    outline: 0;
+}
+
+QTableView#tableDataGrid::item {
+    padding: 6px 8px;
+    border: none;
+}
+
+QToolButton#accentPillButton[toolButtonStyle="3"],
+QToolButton#accentPillButton {
+    min-height: 28px;
+    padding: 5px 14px;
+}
+
+QToolButton#pillButton[toolButtonStyle="3"],
+QToolButton#pillButton {
+    min-height: 28px;
+    padding: 5px 14px;
+}
+
 QLineEdit:disabled,
 QPlainTextEdit:disabled,
 QComboBox:disabled,

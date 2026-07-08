@@ -20,9 +20,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QRegularExpression>
 #include <QScrollArea>
-#include <QSet>
 #include <QStandardItemModel>
 #include <QTime>
 #include <QUuid>
@@ -57,60 +55,34 @@ QScrollArea* create_form_scroll_area(QDialog& dialog, QVBoxLayout*& panelLayout)
 
 bool is_uuid_type(const QString& dataType)
 {
-    return dataType.trimmed().compare("uuid", Qt::CaseInsensitive) == 0;
+    return lith_table::is_uuid_type(dataType);
 }
 
 bool is_boolean_type(const QString& dataType)
 {
-    const auto normalized = dataType.trimmed().toLower();
-    return normalized == "bool" || normalized == "boolean" || normalized == "tinyint(1)";
+    return lith_table::is_boolean_type(dataType);
 }
 
 bool is_json_type(const QString& dataType)
 {
-    const auto normalized = dataType.trimmed().toLower();
-    return normalized == "json" || normalized == "jsonb";
+    return lith_table::is_json_type(dataType);
 }
 
 bool is_binary_type(const QString& dataType)
 {
-    const auto normalized = dataType.trimmed().toLower();
-    return normalized.contains("blob")
-        || normalized.contains("binary")
-        || normalized.contains("bytea")
-        || normalized == "varbinary";
+    return lith_table::is_binary_type(dataType);
 }
 
 bool is_text_like_type(const QString& dataType)
 {
-    const auto normalized = dataType.trimmed().toLower();
-    return normalized.contains("char")
-        || normalized.contains("text")
-        || normalized.contains("clob")
-        || is_json_type(dataType)
-        || is_binary_type(dataType);
+    return lith_table::is_text_like_type(dataType);
 }
 
-enum class TemporalFieldKind {
-    None,
-    Date,
-    Time,
-    DateTime,
-};
+using TemporalFieldKind = lith_table::TemporalFieldKind;
 
 TemporalFieldKind temporal_kind_for(const QString& dataType)
 {
-    const auto normalized = dataType.trimmed().toLower();
-    if (normalized.contains("timestamp") || normalized.contains("datetime")) {
-        return TemporalFieldKind::DateTime;
-    }
-    if (normalized.contains("date")) {
-        return TemporalFieldKind::Date;
-    }
-    if (normalized.contains("time")) {
-        return TemporalFieldKind::Time;
-    }
-    return TemporalFieldKind::None;
+    return lith_table::temporal_kind_for(dataType);
 }
 
 QString current_temporal_value(TemporalFieldKind kind)
@@ -151,43 +123,13 @@ QString type_hint_text(const QString& dataType, bool nullable, bool primaryKey, 
 
 bool is_valid_time_value(const QString& value)
 {
-    static const QRegularExpression timeRegex(
-        "^(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,6}))?$"
-    );
-    const auto match = timeRegex.match(value);
-    if (!match.hasMatch()) {
-        return false;
-    }
-
-    bool ok = false;
-    const int hours = match.captured(1).toInt(&ok);
-    if (!ok || hours < 0 || hours > 23) {
-        return false;
-    }
-    const int minutes = match.captured(2).toInt(&ok);
-    if (!ok || minutes < 0 || minutes > 59) {
-        return false;
-    }
-    const int seconds = match.captured(3).toInt(&ok);
-    return ok && seconds >= 0 && seconds <= 59;
+    return lith_table::validation_error_for_value(value, "time", {}, true, false).isEmpty()
+        && QTime::fromString(value, "HH:mm:ss").isValid();
 }
 
 bool is_valid_datetime_value(const QString& value)
 {
-    static const QRegularExpression dateTimeRegex(
-        "^(\\d{4}-\\d{2}-\\d{2})[ T](\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,6}))?$"
-    );
-    const auto match = dateTimeRegex.match(value);
-    if (!match.hasMatch()) {
-        return false;
-    }
-
-    const auto datePart = match.captured(1);
-    const auto timePart = match.captured(2)
-        + (match.captured(3).isEmpty() ? QString() : "." + match.captured(3));
-
-    return QDate::fromString(datePart, "yyyy-MM-dd").isValid()
-        && is_valid_time_value(timePart);
+    return lith_table::validation_error_for_value(value, "timestamp", {}, true, false).isEmpty();
 }
 
 QString validation_error_for_value(
@@ -198,80 +140,7 @@ QString validation_error_for_value(
     bool isNull
 )
 {
-    const auto normalized = dataType.trimmed().toLower();
-    const auto trimmed = value.trimmed();
-    if (isNull) {
-        return nullable ? QString() : "Use a value because this column is not nullable.";
-    }
-    if (trimmed.isEmpty()) {
-        if (nullable || is_text_like_type(dataType)) {
-            return QString();
-        }
-        return "Use NULL or enter a value.";
-    }
-
-    if (is_uuid_type(dataType)) {
-        return QUuid(trimmed).isNull() ? "Expected a UUID." : QString();
-    }
-    if (normalized.contains("smallint") || normalized == "int2") {
-        bool ok = false;
-        trimmed.toShort(&ok);
-        return ok ? QString() : "Expected a 16-bit integer.";
-    }
-    if (normalized.contains("integer") || normalized == "int4") {
-        bool ok = false;
-        trimmed.toInt(&ok);
-        return ok ? QString() : "Expected an integer.";
-    }
-    if (normalized.contains("bigint") || normalized == "int8") {
-        bool ok = false;
-        trimmed.toLongLong(&ok);
-        return ok ? QString() : "Expected a 64-bit integer.";
-    }
-    if (normalized.contains("numeric") || normalized.contains("decimal") || normalized.contains("double") || normalized.contains("float")) {
-        bool ok = false;
-        trimmed.toDouble(&ok);
-        return ok ? QString() : "Expected a numeric value.";
-    }
-    if (is_boolean_type(dataType)) {
-        static const QSet<QString> validValues = {"true", "false", "1", "0", "t", "f", "yes", "no"};
-        return validValues.contains(trimmed.toLower()) ? QString() : "Expected true/false or 1/0.";
-    }
-    if (is_json_type(dataType)) {
-        QJsonParseError error;
-        QJsonDocument::fromJson(trimmed.toUtf8(), &error);
-        return error.error == QJsonParseError::NoError ? QString() : "Expected valid JSON.";
-    }
-    if (normalized == "year") {
-        static const QRegularExpression yearRegex("^\\d{4}$");
-        return yearRegex.match(trimmed).hasMatch() ? QString() : "Expected a 4-digit year.";
-    }
-    if (normalized == "bit" || normalized == "varbit") {
-        static const QRegularExpression bitRegex("^[01]+$");
-        return bitRegex.match(trimmed).hasMatch() ? QString() : "Expected a bit string containing only 0 and 1.";
-    }
-    if (driver.trimmed().compare("postgresql", Qt::CaseInsensitive) == 0
-        && (normalized == "inet" || normalized == "cidr")) {
-        static const QRegularExpression networkRegex(
-            "^(?:\\d{1,3}(?:\\.\\d{1,3}){3})(?:/\\d{1,2})?$"
-        );
-        return networkRegex.match(trimmed).hasMatch() ? QString() : "Expected an IPv4 address or CIDR.";
-    }
-    switch (temporal_kind_for(dataType)) {
-    case TemporalFieldKind::Date:
-        return QDate::fromString(trimmed, "yyyy-MM-dd").isValid() ? QString() : "Expected YYYY-MM-DD.";
-    case TemporalFieldKind::Time:
-        return is_valid_time_value(trimmed)
-            ? QString()
-            : "Expected HH:MM:SS or HH:MM:SS.ffffff.";
-    case TemporalFieldKind::DateTime:
-        return is_valid_datetime_value(trimmed)
-            ? QString()
-            : "Expected YYYY-MM-DD HH:MM:SS or YYYY-MM-DD HH:MM:SS.ffffff.";
-    case TemporalFieldKind::None:
-        break;
-    }
-    return QString();
+    return lith_table::validation_error_for_value(value, dataType, driver, nullable, isNull);
 }
 
 QJsonArray build_cells_from_dialog(
@@ -312,45 +181,13 @@ QJsonArray build_cells_from_dialog(
     return cells;
 }
 
-void append_key_value_from_item(QJsonObject& key, const QStandardItem* item)
-{
-    if (lith_table::item_is_null(item)) {
-        key.insert("value", QJsonValue::Null);
-        return;
-    }
-    key.insert("value", item ? item->text() : QString());
-}
-
 QJsonArray build_row_keys_from_models(
     QStandardItemModel* structureModel,
     QStandardItemModel* resultModel,
     int selectedRow
 )
 {
-    QJsonArray primaryKeys;
-    QJsonArray fallbackKeys;
-
-    if (!structureModel || !resultModel || selectedRow < 0) {
-        return primaryKeys;
-    }
-
-    for (int row = 0; row < structureModel->rowCount(); ++row) {
-        const auto columnName = structureModel->item(row, 1)->text();
-        QJsonObject key;
-        key.insert("column", columnName);
-        key.insert("data_type", structureModel->item(row, 2)->text());
-        append_key_value_from_item(
-            key,
-            lith_table::result_item_for_column(resultModel, selectedRow, columnName)
-        );
-
-        fallbackKeys.append(key);
-        if (structureModel->item(row, 4)->text() == "PK") {
-            primaryKeys.append(key);
-        }
-    }
-
-    return primaryKeys.isEmpty() ? fallbackKeys : primaryKeys;
+    return lith_table::build_row_keys_from_models(structureModel, resultModel, selectedRow);
 }
 
 } // namespace

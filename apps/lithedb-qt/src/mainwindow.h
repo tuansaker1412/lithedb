@@ -92,7 +92,8 @@ private:
         const QString& pendingStatus,
         const QString& successStatus,
         const QString& successTitle,
-        const QString& errorTitle
+        const QString& errorTitle,
+        bool silent = false
     );
     void close_tabs_for_connection(const QString& connectionId);
     class QStandardItem* selected_connection_item() const;
@@ -105,6 +106,8 @@ private:
     void duplicate_current_row();
     void edit_current_row();
     void delete_current_row();
+    void begin_inline_edit(TablePageWidget* tablePage, int row);
+    void commit_inline_edit(TablePageWidget* tablePage, int row);
     QString bridge_binary_path() const;
 
     QToolBar* toolbar_ = nullptr;

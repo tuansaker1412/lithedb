@@ -42,44 +42,6 @@ using namespace lith_models;
 
 namespace {
 
-void append_key_value_from_item(QJsonObject& key, const QStandardItem* item)
-{
-    if (lith_table::item_is_null(item)) {
-        key.insert("value", QJsonValue::Null);
-        return;
-    }
-    key.insert("value", item ? item->text() : QString());
-}
-
-QJsonArray build_row_keys_from_models(
-    QStandardItemModel* structureModel,
-    QStandardItemModel* resultModel,
-    int selectedRow
-)
-{
-    QJsonArray primaryKeys;
-    QJsonArray fallbackKeys;
-
-    if (!structureModel || !resultModel || selectedRow < 0) {
-        return primaryKeys;
-    }
-
-    for (int row = 0; row < structureModel->rowCount(); ++row) {
-        const auto columnName = structureModel->item(row, 1)->text();
-        QJsonObject key;
-        key.insert("column", columnName);
-        key.insert("data_type", structureModel->item(row, 2)->text());
-        append_key_value_from_item(key, lith_table::result_item_for_column(resultModel, selectedRow, columnName));
-
-        fallbackKeys.append(key);
-        if (structureModel->item(row, 4)->text() == "PK") {
-            primaryKeys.append(key);
-        }
-    }
-
-    return primaryKeys.isEmpty() ? fallbackKeys : primaryKeys;
-}
-
 } // namespace
 
 void MainWindow::load_table_content(const QString& connectionId, const QString& database, const QString& table)
@@ -183,6 +145,16 @@ TablePageWidget* MainWindow::ensure_table_tab(const QString& connectionId, const
     connect(tablePage->data_widget(), &TableDataWidget::contextEditRequested, this, [this]() { edit_current_row(); });
     connect(tablePage->data_widget(), &TableDataWidget::contextDuplicateRequested, this, [this]() { duplicate_current_row(); });
     connect(tablePage->data_widget(), &TableDataWidget::contextDeleteRequested, this, [this]() { delete_current_row(); });
+    connect(tablePage->data_widget(), &TableDataWidget::inlineEditEnterRequested, this, [this, tablePage](const QModelIndex& index) {
+        begin_inline_edit(tablePage, index.row());
+    });
+    connect(tablePage->data_widget(), &TableDataWidget::inlineEditSaveRequested, this, [this, tablePage](int row) {
+        commit_inline_edit(tablePage, row);
+    });
+    connect(tablePage->data_widget(), &TableDataWidget::inlineEditCancelRequested, this, [this, tablePage](int row) {
+        tablePage->data_widget()->exit_edit_mode(false);
+        status_label_->setText("Edit cancelled");
+    });
     connect(tablePage->data_widget(), &TableDataWidget::pageSizeChanged, this, [this](int new_size) {
         current_table_page_size_ = new_size;
         current_table_page_ = 0;  // Reset to first page when changing page size
@@ -346,6 +318,11 @@ void MainWindow::populate_structure_page(TablePageWidget* tablePage, const QJson
             new QStandardItem(column.value("auto_increment").toBool() ? "Yes" : ""),
         });
     }
+
+    // Keep the data widget in sync so inline editing knows which columns are
+    // editable and how to validate edited values.
+    tablePage->data_widget()->set_structure_model(structureModel);
+    tablePage->data_widget()->set_driver(tablePage->driver());
 
     foreignKeyModel->clear();
     foreignKeyModel->setHorizontalHeaderLabels({"Constraint", "Column", "References"});
@@ -606,7 +583,8 @@ void MainWindow::run_write_command_async(
     const QString& pendingStatus,
     const QString& successStatus,
     const QString& successTitle,
-    const QString& errorTitle
+    const QString& errorTitle,
+    bool silent
 )
 {
     status_label_->setText(pendingStatus);
@@ -614,7 +592,7 @@ void MainWindow::run_write_command_async(
         status_progress_->show();
     }
     auto* process = new QProcess(this);
-    connect(process, &QProcess::finished, this, [this, process, successStatus, successTitle, errorTitle](int exitCode, QProcess::ExitStatus exitStatus) {
+    connect(process, &QProcess::finished, this, [this, process, successStatus, successTitle, errorTitle, silent](int exitCode, QProcess::ExitStatus exitStatus) {
         if (status_progress_) {
             status_progress_->hide();
         }
@@ -638,29 +616,33 @@ void MainWindow::run_write_command_async(
         if (!rowsAffected.has_value()) {
             reload_current_table();
             status_label_->setText(QString("%1 (database reloaded)").arg(successStatus));
-            QMessageBox::information(
-                this,
-                successTitle,
-                QString(
-                    "%1, but the bridge returned an unexpected success payload.\n\nRaw output:\n%2"
-                )
-                    .arg(successStatus, QString::fromUtf8(out).trimmed())
-            );
+            if (!silent) {
+                QMessageBox::information(
+                    this,
+                    successTitle,
+                    QString(
+                        "%1, but the bridge returned an unexpected success payload.\n\nRaw output:\n%2"
+                    )
+                        .arg(successStatus, QString::fromUtf8(out).trimmed())
+                );
+            }
             return;
         }
 
         reload_current_table();
         if (*rowsAffected == 0) {
             status_label_->setText(QString("%1 (0 rows affected)").arg(successStatus));
-            QMessageBox::information(
-                this,
-                successTitle,
-                QString(
-                    "%1, but the database reported 0 affected rows.\n"
-                    "The selected row may no longer match, or the submitted values may already be identical."
-                )
-                    .arg(successStatus)
-            );
+            if (!silent) {
+                QMessageBox::information(
+                    this,
+                    successTitle,
+                    QString(
+                        "%1, but the database reported 0 affected rows.\n"
+                        "The selected row may no longer match, or the submitted values may already be identical."
+                    )
+                        .arg(successStatus)
+                );
+            }
             return;
         }
 
@@ -668,11 +650,13 @@ void MainWindow::run_write_command_async(
         status_label_->setText(
             QString("%1 (%2 %3 affected)").arg(successStatus).arg(*rowsAffected).arg(rowLabel)
         );
-        QMessageBox::information(
-            this,
-            successTitle,
-            QString("%1\n\nRows affected: %2").arg(successStatus).arg(*rowsAffected)
-        );
+        if (!silent) {
+            QMessageBox::information(
+                this,
+                successTitle,
+                QString("%1\n\nRows affected: %2").arg(successStatus).arg(*rowsAffected)
+            );
+        }
     });
     process->start(bridge_binary_path(), args);
 }
@@ -791,7 +775,7 @@ void MainWindow::delete_current_row()
         return;
     }
     const auto selectedRow = resultGrid->selectionModel()->selectedRows().first().row();
-    QJsonArray keys = build_row_keys_from_models(structureModel, resultModel, selectedRow);
+    QJsonArray keys = lith_table::build_row_keys_from_models(structureModel, resultModel, selectedRow);
     if (keys.isEmpty()) {
         QMessageBox::warning(this, "Delete Failed", "Could not identify the selected row.");
         return;
@@ -806,5 +790,94 @@ void MainWindow::delete_current_row()
         "Row deleted",
         "Delete Complete",
         "Delete Failed"
+    );
+}
+
+void MainWindow::begin_inline_edit(TablePageWidget* tablePage, int row)
+{
+    if (!tablePage) {
+        return;
+    }
+    auto* structureModel = tablePage->structure_widget()->structure_model();
+    if (!structureModel || structureModel->rowCount() == 0) {
+        status_label_->setText("Table structure not loaded yet");
+        return;
+    }
+    tablePage->data_widget()->enter_edit_mode(row);
+}
+
+void MainWindow::commit_inline_edit(TablePageWidget* tablePage, int row)
+{
+    if (!tablePage) {
+        return;
+    }
+    auto* resultModel = tablePage->data_widget()->model();
+    auto* structureModel = tablePage->structure_widget()->structure_model();
+    if (!resultModel || !structureModel || row < 0 || row >= resultModel->rowCount()) {
+        return;
+    }
+
+    // Build the changes payload from dirty cells, validating each one.
+    QJsonArray changes;
+    for (int column = 0; column < structureModel->rowCount(); ++column) {
+        if (!lith_table::column_is_inline_editable(structureModel, column, tablePage->driver())) {
+            continue;
+        }
+        auto* item = resultModel->item(row, column);
+        if (!item || !item->data(lith_table::RoleCellDirty).toBool()) {
+            continue;
+        }
+        const auto columnName = lith_table::structure_column_name(structureModel, column);
+        const auto dataType = lith_table::structure_column_data_type(structureModel, column);
+        const bool nullable = lith_table::structure_column_is_nullable(structureModel, column);
+        const auto text = item->text();
+        const bool isNull = (text.trimmed().isEmpty() && nullable)
+            || text.trimmed().compare("NULL", Qt::CaseInsensitive) == 0;
+        const auto value = isNull ? QString() : text;
+        const auto error = lith_table::validation_error_for_value(value, dataType, tablePage->driver(), nullable, isNull);
+        if (!error.isEmpty()) {
+            QMessageBox::warning(this, "Invalid Value", QString("%1: %2").arg(columnName, error));
+            return;
+        }
+        changes.append(lith_table::build_cell_json(columnName, dataType, value, isNull));
+    }
+
+    if (changes.isEmpty()) {
+        tablePage->data_widget()->exit_edit_mode(true);
+        status_label_->setText("No changes to save");
+        return;
+    }
+
+    // Build keys from the pre-edit snapshot so the WHERE clause matches the
+    // original row, not the edited values.
+    QJsonArray keys;
+    {
+        QJsonArray primaryKeys;
+        QJsonArray fallbackKeys;
+        for (int column = 0; column < structureModel->rowCount(); ++column) {
+            const auto columnName = lith_table::structure_column_name(structureModel, column);
+            const auto dataType = lith_table::structure_column_data_type(structureModel, column);
+            auto* item = resultModel->item(row, column);
+            const auto original = item ? item->data(lith_table::RoleCellOriginalValue).toString() : QString();
+            const bool originalNull = item ? item->data(lith_table::RoleCellOriginalIsNull).toBool() : false;
+            auto cell = lith_table::build_cell_json(columnName, dataType, original, originalNull);
+            fallbackKeys.append(cell);
+            if (lith_table::structure_column_is_primary_key(structureModel, column)) {
+                primaryKeys.append(cell);
+            }
+        }
+        keys = primaryKeys.isEmpty() ? fallbackKeys : primaryKeys;
+    }
+
+    tablePage->data_widget()->exit_edit_mode(true);
+    const auto changesJson = QJsonDocument(changes).toJson(QJsonDocument::Compact);
+    const auto keysJson = QJsonDocument(keys).toJson(QJsonDocument::Compact);
+    run_write_command_async(
+        {"update-row", tablePage->connection_id(), tablePage->database(), tablePage->table(), QString::fromUtf8(changesJson), QString::fromUtf8(keysJson)},
+        QString("Updating %1...").arg(tablePage->table()),
+        "Row updated",
+        "Update Complete",
+        "Update Failed",
+        true
     );
 }
