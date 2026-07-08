@@ -177,7 +177,6 @@ set(CPACK_PACKAGE_FILE_NAME "${LITHEDB_PACKAGE_BASENAME}")
 set(CPACK_STRIP_FILES TRUE)
 
 set(CPACK_MONOLITHIC_INSTALL TRUE)
-set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY TRUE)
 
 if(WIN32)
     set(CPACK_GENERATOR "ZIP;NSIS")
@@ -186,12 +185,12 @@ if(WIN32)
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
     set(CPACK_NSIS_EXECUTABLES_DIRECTORY "bin")
     set(CPACK_NSIS_CREATE_ICONS "
-        CreateShortCut \"$SMPROGRAMS\\$STARTMENU_FOLDER\\LitheDB.lnk\" \"$INSTDIR\\bin\\LitheDB.exe\"
-        CreateShortCut \"$DESKTOP\\LitheDB.lnk\" \"$INSTDIR\\bin\\LitheDB.exe\"
+        CreateShortCut \\\"$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\LitheDB.lnk\\\" \\\"$INSTDIR\\\\bin\\\\LitheDB.exe\\\"
+        CreateShortCut \\\"$DESKTOP\\\\LitheDB.lnk\\\" \\\"$INSTDIR\\\\bin\\\\LitheDB.exe\\\"
     ")
     set(CPACK_NSIS_DELETE_ICONS "
-        Delete \"$SMPROGRAMS\\$STARTMENU_FOLDER\\LitheDB.lnk\"
-        Delete \"$DESKTOP\\LitheDB.lnk\"
+        Delete \\\"$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\LitheDB.lnk\\\"
+        Delete \\\"$DESKTOP\\\\LitheDB.lnk\\\"
     ")
 elseif(APPLE)
     set(CPACK_GENERATOR "DragNDrop")
