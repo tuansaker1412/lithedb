@@ -6,7 +6,7 @@
 
 LitheDB is a cross-platform desktop database client built with a shared Rust core and a production Qt6 Widgets frontend.
 
-`v1.0.2` is the current multi-platform production release. The Qt app under `apps/lithedb-qt/` is now the maintained desktop frontend for Linux, macOS, and Windows. The older GTK frontend under `src/` remains in the repository as a legacy reference and fallback code path, but it is no longer the release target and will not receive feature work.
+`v1.0.3` is the current multi-platform production release. The Qt app under `apps/lithedb-qt/` is now the maintained desktop frontend for Linux, macOS, and Windows. The older GTK frontend under `src/` remains in the repository as a legacy reference and fallback code path, but it is no longer the release target and will not receive feature work.
 
 ## Features
 
@@ -14,9 +14,13 @@ LitheDB is a cross-platform desktop database client built with a shared Rust cor
 - Qt6 desktop UI for Linux, macOS, and Windows
 - Shared Rust core for config, DB drivers, state, and secure credential handling
 - Secure password storage via system keyring with encrypted fallback
-- Connection management, schema browsing, query tabs, table data browsing, and row CRUD
+- Multiple simultaneous database connections, schema browsing, query tabs, table data browsing, and row CRUD
 - CSV export, copy helpers, and keyboard shortcuts
 - GitHub Actions release pipeline that builds multi-platform artifacts automatically
+
+## Coming Soon
+
+- **MongoDB support**: Native driver integration for NoSQL database management, collection browsing, and document operations
 
 ## Official Release Targets
 
@@ -31,7 +35,7 @@ Production releases are published from GitHub Releases and should include:
 - macOS `.dmg`
 - `SHA256SUMS`
 
-Flatpak and the GTK/Linux packaging flow remain in the repository as legacy material and are not part of the official `v1.0.2` production release line.
+Flatpak and the GTK/Linux packaging flow remain in the repository as legacy material and are not part of the official `v1.0.3` production release line.
 
 ## Install
 
@@ -135,8 +139,8 @@ cmake --build build-qt --config Release
 3. Create and push a tag:
 
 ```bash
-git tag -a v1.0.2 -m "Release v1.0.2"
-git push origin v1.0.2
+git tag -a v1.0.3 -m "Release v1.0.3"
+git push origin v1.0.3
 ```
 
 GitHub Actions will then:
@@ -150,7 +154,7 @@ GitHub Actions will then:
 
 1. Launch the Qt app.
 2. Create or edit a connection.
-3. Connect to a database.
+3. Connect to one or more databases simultaneously.
 4. Browse schema objects.
 5. Open table data or run SQL in query tabs.
 6. Export data or apply row-level CRUD operations as needed.
