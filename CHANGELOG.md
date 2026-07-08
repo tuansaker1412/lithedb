@@ -4,6 +4,23 @@ All notable changes to this project should be documented in this file.
 
 The format is intentionally lightweight and release-oriented.
 
+## [1.0.3] - 2026-07-08
+
+### Added
+
+- Multiple simultaneous database connections support
+- MongoDB roadmap announcement in README
+
+### Fixed
+
+- NSIS escape sequences for Windows installer builds
+- CPACK_INCLUDE_TOPLEVEL_DIRECTORY compatibility with Windows NSIS generator
+
+### Changed
+
+- Updated release metadata across Cargo, Qt CMake, and README to `1.0.3`
+- Enhanced README with multiple connections workflow documentation
+
 ## [1.0.2] - 2026-06-28
 
 ### Changed
