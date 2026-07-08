@@ -1,6 +1,6 @@
 # Maintainer: LitheDB Contributors <contact@lithedb.dev>
 pkgname=lithedb
-pkgver=1.0.2
+pkgver=1.0.3
 pkgrel=1
 pkgdesc="Cross-platform Qt database client with table editing and SQL query tools"
 arch=('x86_64')
