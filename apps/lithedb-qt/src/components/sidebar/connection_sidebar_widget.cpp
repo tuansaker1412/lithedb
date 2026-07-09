@@ -162,12 +162,22 @@ void ConnectionSidebarWidget::set_view_mode(ViewMode mode)
     }
 }
 
-void ConnectionSidebarWidget::set_connection_actions_enabled(bool hasSelection, bool isActive)
+void ConnectionSidebarWidget::set_connection_actions_enabled(bool hasSelection, bool isActive, bool isConnecting)
 {
-    edit_button_->setEnabled(hasSelection);
-    delete_button_->setEnabled(hasSelection);
-    connect_button_->setEnabled(hasSelection && !isActive);
-    disconnect_button_->setEnabled(isActive);
+    edit_button_->setEnabled(hasSelection && !isConnecting);
+    delete_button_->setEnabled(hasSelection && !isConnecting);
+    connect_button_->setEnabled(hasSelection && !isActive && !isConnecting);
+    // Allow Disconnect while connecting so the user can abort a hung TCP/auth wait.
+    disconnect_button_->setEnabled(hasSelection && (isActive || isConnecting));
+    if (isConnecting) {
+        disconnect_button_->setText(tr("Cancel"));
+        disconnect_button_->setToolTip(tr("Cancel connecting (do not wait for timeout)"));
+        disconnect_button_->setWhatsThis(tr("Abort the in-progress connection attempt immediately instead of waiting for the network timeout."));
+    } else {
+        disconnect_button_->setText(tr("Disconnect"));
+        disconnect_button_->setToolTip(tr("Disconnect active connection"));
+        disconnect_button_->setWhatsThis(tr("Disconnect the selected database connection and close related tabs."));
+    }
 }
 
 void ConnectionSidebarWidget::apply_schema_filter(const QString& text)
@@ -248,16 +258,20 @@ void ConnectionSidebarWidget::show_context_menu(const QPoint& pos)
     QMenu menu(this);
 
     if (kind == "connection") {
-        auto connectionId = targetItem->data(Qt::UserRole + 2).toString();
-        auto isConnected = targetItem->data(Qt::UserRole + 10).toBool();
-        
-        if (!isConnected) {
-            auto* connectAction = menu.addAction("Connect");
+        const auto connectionId = targetItem->data(Qt::UserRole + 2).toString();
+        const bool canConnect = connect_button_ && connect_button_->isEnabled();
+        const bool canDisconnect = disconnect_button_ && disconnect_button_->isEnabled();
+        const bool isCancelMode = canDisconnect && disconnect_button_
+            && disconnect_button_->text() == tr("Cancel");
+
+        if (canConnect) {
+            auto* connectAction = menu.addAction(tr("Connect"));
             connect(connectAction, &QAction::triggered, this, [this]() {
                 emit connectRequested();
             });
-        } else {
-            auto* disconnectAction = menu.addAction("Disconnect");
+        }
+        if (canDisconnect) {
+            auto* disconnectAction = menu.addAction(isCancelMode ? tr("Cancel Connecting") : tr("Disconnect"));
             connect(disconnectAction, &QAction::triggered, this, [this]() {
                 emit disconnectRequested();
             });
@@ -265,19 +279,19 @@ void ConnectionSidebarWidget::show_context_menu(const QPoint& pos)
         
         menu.addSeparator();
         
-        auto* editAction = menu.addAction("Edit Connection...");
+        auto* editAction = menu.addAction(tr("Edit Connection..."));
         connect(editAction, &QAction::triggered, this, [this]() {
             emit editConnectionRequested();
         });
         
-        auto* deleteAction = menu.addAction("Delete Connection");
+        auto* deleteAction = menu.addAction(tr("Delete Connection"));
         connect(deleteAction, &QAction::triggered, this, [this]() {
             emit deleteConnectionRequested();
         });
         
         menu.addSeparator();
         
-        auto* newDbAction = menu.addAction("New Database...");
+        auto* newDbAction = menu.addAction(tr("New Database..."));
         connect(newDbAction, &QAction::triggered, this, [this, connectionId]() {
             emit createDatabaseRequested(connectionId);
         });

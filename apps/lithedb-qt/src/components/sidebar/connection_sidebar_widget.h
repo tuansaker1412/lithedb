@@ -27,7 +27,7 @@ public:
     QStandardItemModel* model() const;
     QLineEdit* filter_edit() const;
     void set_view_mode(ViewMode mode);
-    void set_connection_actions_enabled(bool hasSelection, bool isActive);
+    void set_connection_actions_enabled(bool hasSelection, bool isActive, bool isConnecting = false);
     void apply_schema_filter(const QString& text);
     void show_context_menu(const QPoint& pos);
 

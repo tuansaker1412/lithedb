@@ -3,10 +3,12 @@
 #include "models/query_tab_state.h"
 
 #include <QMainWindow>
+#include <QMap>
 #include <QSet>
 #include <QString>
 #include <vector>
 
+class QAbstractItemModel;
 class QApplication;
 class QCloseEvent;
 class QEvent;
@@ -16,8 +18,10 @@ class QModelIndex;
 class QObject;
 class QProgressBar;
 class QSplitter;
+class QStandardItem;
 class QTabWidget;
 class QTableView;
+class QTimer;
 class QToolBar;
 class QStackedWidget;
 class QStandardItemModel;
@@ -102,7 +106,7 @@ private:
     void copy_selected_row_json();
     void copy_selected_row_csv();
     void export_current_table_csv();
-    void open_cell_value_dialog(QTableView* grid, QStandardItemModel* model, const QModelIndex& index, bool allow_row_edit);
+    void open_cell_value_dialog(QTableView* grid, QAbstractItemModel* model, const QModelIndex& index, bool allow_row_edit);
     void insert_current_row();
     void duplicate_current_row();
     void edit_current_row();
@@ -111,6 +115,15 @@ private:
     void commit_inline_edit(TablePageWidget* tablePage, int row);
     QString bridge_binary_path() const;
     bool is_connected(const QString& connectionId) const;
+
+    struct LoadingConnection {
+        QStandardItem* item = nullptr;
+        int rotationAngle = 0;
+        int dotTick = 0;
+        QString baseName;
+    };
+    void start_connection_loading_animation(const QString& connectionId, QStandardItem* item);
+    void stop_connection_loading_animation(const QString& connectionId);
 
     QToolBar* toolbar_ = nullptr;
     QSplitter* main_splitter_ = nullptr;
@@ -137,4 +150,6 @@ private:
     Qt::Edges active_resize_edges_ = Qt::Edges();
     QWidget* resize_cursor_widget_ = nullptr;
     std::vector<lith_models::QueryTabState> query_tab_states_;
+    QMap<QString, LoadingConnection> loading_connections_;
+    QTimer* loading_animation_timer_ = nullptr;
 };

@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
+#include <QPolygonF>
 #include <QStandardItem>
 #include <QStringList>
 #include <QStyle>
@@ -34,6 +35,31 @@ QIcon connection_status_icon(bool connected)
     }
 
     return QIcon(pixmap);
+}
+
+QPixmap draw_loading_pixmap(int angleDegrees)
+{
+    QPixmap pixmap(14, 14);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    painter.translate(7.0, 7.0);
+    painter.rotate(angleDegrees);
+    painter.translate(-7.0, -7.0);
+
+    painter.setPen(QPen(QColor("#f59e0b"), 1.6));
+    QRectF arcRect(2.0, 2.0, 10.0, 10.0);
+    painter.drawArc(arcRect, 30 * 16, 240 * 16);
+
+    painter.setBrush(QColor("#f59e0b"));
+    painter.setPen(Qt::NoPen);
+    QPolygonF arrowHead;
+    arrowHead << QPointF(11.5, 3.0) << QPointF(9.5, 2.0) << QPointF(10.0, 4.5);
+    painter.drawPolygon(arrowHead);
+
+    return pixmap;
 }
 
 } // namespace
@@ -103,6 +129,25 @@ void apply_connection_status_icon(QStandardItem* item, bool connected)
     }
     item->setIcon(connection_status_icon(connected));
     item->setToolTip(connected ? "Connected" : "Disconnected");
+}
+
+QIcon connection_loading_icon()
+{
+    return QIcon(draw_loading_pixmap(0));
+}
+
+void apply_connection_loading_icon(QStandardItem* item)
+{
+    if (!item) {
+        return;
+    }
+    item->setIcon(connection_loading_icon());
+    item->setToolTip("Connecting...");
+}
+
+QIcon rotated_connection_loading_icon(int angleDegrees)
+{
+    return QIcon(draw_loading_pixmap(angleDegrees));
 }
 
 } // namespace lith_mainwindow

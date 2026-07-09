@@ -12,6 +12,7 @@ class QTableView;
 class QToolButton;
 class QComboBox;
 class InlineEditDelegate;
+class ResultTableModel;
 
 class TableDataWidget : public QWidget
 {
@@ -25,7 +26,7 @@ public:
     QLineEdit* sort_column_input() const;
     QCheckBox* sort_direction_toggle() const;
     QTableView* grid() const;
-    QStandardItemModel* model() const;
+    ResultTableModel* model() const;
     QLabel* status_label() const;
     QProgressBar* spinner() const;
     QStackedWidget* stack() const;
@@ -43,6 +44,8 @@ public:
     // save/cancel reads the model state. Without this, typing in a cell and
     // immediately clicking Save can lose the last edit.
     void commit_current_editor();
+    /// Close open cell editor and leave inline-edit mode before model reset/delete.
+    void prepare_for_model_reset();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -75,13 +78,15 @@ private:
     void update_dirty_tooltips(int row);
     void update_save_cancel_visibility();
     bool cell_is_editable(int row, int column) const;
+    bool focus_is_cell_editor() const;
+    void close_open_editor();
 
     QToolButton* prev_button_ = nullptr;
     QToolButton* next_button_ = nullptr;
     QLineEdit* sort_column_input_ = nullptr;
     QCheckBox* sort_direction_toggle_ = nullptr;
     QTableView* grid_ = nullptr;
-    QStandardItemModel* model_ = nullptr;
+    ResultTableModel* model_ = nullptr;
     QStandardItemModel* structure_model_ = nullptr;
     QString driver_;
     QLabel* status_label_ = nullptr;

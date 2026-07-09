@@ -1,5 +1,6 @@
 #include "query_result_widget.h"
 
+#include "../../models/result_table_model.h"
 #include "../../ui_helpers.h"
 
 #include <QAbstractItemView>
@@ -7,7 +8,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QProgressBar>
-#include <QStandardItemModel>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QTableView>
@@ -59,7 +59,7 @@ QueryResultWidget::QueryResultWidget(QWidget* parent)
     toolbarLayout->addWidget(spinner_);
     toolbarLayout->addWidget(status_label_);
 
-    model_ = new QStandardItemModel(this);
+    model_ = new ResultTableModel(this);
     grid_ = new QTableView(this);
     grid_->setModel(model_);
     grid_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
@@ -98,6 +98,6 @@ QueryResultWidget::QueryResultWidget(QWidget* parent)
 
 QStackedWidget* QueryResultWidget::stack() const { return stack_; }
 QTableView* QueryResultWidget::grid() const { return grid_; }
-QStandardItemModel* QueryResultWidget::model() const { return model_; }
+ResultTableModel* QueryResultWidget::model() const { return model_; }
 QLabel* QueryResultWidget::status_label() const { return status_label_; }
 QProgressBar* QueryResultWidget::spinner() const { return spinner_; }

@@ -8,8 +8,8 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 #include <QRegularExpression>
+#include <QAbstractItemModel>
 #include <QSet>
-#include <QStandardItem>
 #include <QStandardItemModel>
 #include <QTime>
 #include <QUuid>
@@ -17,26 +17,17 @@
 namespace lith_table {
 namespace {
 
-int result_column_index_for_name(const QStandardItemModel* model, const QString& columnName)
+void append_key_value_from_model(QJsonObject& key, const QAbstractItemModel* model, int row, int column)
 {
-    if (!model) {
-        return -1;
-    }
-    for (int column = 0; column < model->columnCount(); ++column) {
-        if (model->headerData(column, Qt::Horizontal).toString() == columnName) {
-            return column;
-        }
-    }
-    return -1;
-}
-
-void append_key_value_from_item(QJsonObject& key, const QStandardItem* item)
-{
-    if (item_is_null(item)) {
+    if (!model || row < 0 || column < 0) {
         key.insert("value", QJsonValue::Null);
         return;
     }
-    key.insert("value", item ? item->text() : QString());
+    if (index_is_null(model, row, column)) {
+        key.insert("value", QJsonValue::Null);
+        return;
+    }
+    key.insert("value", cell_text_at(model, row, column));
 }
 
 bool is_valid_time_value(const QString& value)
@@ -96,29 +87,33 @@ QString format_cell_display(const QJsonValue& cellValue)
     return cellValue.toString();
 }
 
-QStandardItem* make_result_item(const QJsonValue& cellValue)
+int result_column_index_for_name(const QAbstractItemModel* model, const QString& columnName)
 {
-    auto* item = new QStandardItem(format_cell_display(cellValue));
-    item->setData(cellValue.isNull() || cellValue.isUndefined(), RoleCellIsNull);
-    return item;
-}
-
-bool item_is_null(const QStandardItem* item)
-{
-    return item && item->data(RoleCellIsNull).toBool();
-}
-
-const QStandardItem* result_item_for_column(
-    const QStandardItemModel* model,
-    int row,
-    const QString& columnName
-)
-{
-    const int column = result_column_index_for_name(model, columnName);
-    if (column < 0 || row < 0) {
-        return nullptr;
+    if (!model) {
+        return -1;
     }
-    return model->item(row, column);
+    for (int column = 0; column < model->columnCount(); ++column) {
+        if (model->headerData(column, Qt::Horizontal).toString() == columnName) {
+            return column;
+        }
+    }
+    return -1;
+}
+
+bool index_is_null(const QAbstractItemModel* model, int row, int column)
+{
+    if (!model || row < 0 || column < 0) {
+        return false;
+    }
+    return model->index(row, column).data(RoleCellIsNull).toBool();
+}
+
+QString cell_text_at(const QAbstractItemModel* model, int row, int column)
+{
+    if (!model || row < 0 || column < 0) {
+        return {};
+    }
+    return model->index(row, column).data(Qt::DisplayRole).toString();
 }
 
 std::optional<qulonglong> parse_rows_affected_payload(const QByteArray& output)
@@ -294,7 +289,7 @@ QString validation_error_for_value(
 
 QJsonArray build_row_keys_from_models(
     const QStandardItemModel* structureModel,
-    const QStandardItemModel* resultModel,
+    const QAbstractItemModel* resultModel,
     int selectedRow
 )
 {
@@ -307,13 +302,11 @@ QJsonArray build_row_keys_from_models(
 
     for (int row = 0; row < structureModel->rowCount(); ++row) {
         const auto columnName = structure_column_name(structureModel, row);
+        const int columnIndex = result_column_index_for_name(resultModel, columnName);
         QJsonObject key;
         key.insert("column", columnName);
         key.insert("data_type", structure_column_data_type(structureModel, row));
-        append_key_value_from_item(
-            key,
-            result_item_for_column(resultModel, selectedRow, columnName)
-        );
+        append_key_value_from_model(key, resultModel, selectedRow, columnIndex);
 
         fallbackKeys.append(key);
         if (structure_column_is_primary_key(structureModel, row)) {

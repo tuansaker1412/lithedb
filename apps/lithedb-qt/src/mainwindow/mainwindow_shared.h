@@ -21,5 +21,7 @@ QWidget* make_corner_hint(QWidget* parent, const QString& objectName);
 QIcon database_item_icon();
 QIcon table_item_icon();
 void apply_connection_status_icon(QStandardItem* item, bool connected);
+void apply_connection_loading_icon(QStandardItem* item);
+QIcon rotated_connection_loading_icon(int angleDegrees);
 
 } // namespace lith_mainwindow

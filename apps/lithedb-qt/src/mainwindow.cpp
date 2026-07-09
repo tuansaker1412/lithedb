@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include "bridge_client.h"
 #include "bridge_utils.h"
 #include "mainwindow/mainwindow_shared.h"
 
@@ -68,6 +69,7 @@ MainWindow::MainWindow(QWidget* parent)
     install_resize_tracking(menuBar());
     install_resize_tracking(statusBar());
     install_splitter_resize_cursors();
+    BridgeClient::instance()->start();
     load_connections();
 
     connect(data_tabs_, &QTabWidget::tabCloseRequested, this, [this](int index) {
@@ -100,6 +102,7 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    BridgeClient::instance()->stop();
     QSettings settings;
     settings.setValue("window/geometry", saveGeometry());
     settings.setValue("window/mainSplitter", main_splitter_->saveState());

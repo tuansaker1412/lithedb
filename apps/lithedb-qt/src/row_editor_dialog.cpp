@@ -146,7 +146,7 @@ QString validation_error_for_value(
 QJsonArray build_cells_from_dialog(
     QDialog& dialog,
     QStandardItemModel* structure_model,
-    QStandardItemModel* result_model,
+    QAbstractItemModel* result_model,
     int row,
     bool use_existing_values,
     bool skip_auto_generated
@@ -164,8 +164,9 @@ QJsonArray build_cells_from_dialog(
         auto* nullCheck = dialog.findChild<QAbstractButton*>(QString("null_%1").arg(index));
         QString value = lineEdit ? lineEdit->text() : QString();
         if (use_existing_values && value.isEmpty() && result_model && row >= 0) {
-            if (const auto* existingItem = lith_table::result_item_for_column(result_model, row, column)) {
-                value = existingItem->text();
+            const int colIndex = lith_table::result_column_index_for_name(result_model, column);
+            if (colIndex >= 0 && !lith_table::index_is_null(result_model, row, colIndex)) {
+                value = lith_table::cell_text_at(result_model, row, colIndex);
             }
         }
         QJsonObject cell;
@@ -183,7 +184,7 @@ QJsonArray build_cells_from_dialog(
 
 QJsonArray build_row_keys_from_models(
     QStandardItemModel* structureModel,
-    QStandardItemModel* resultModel,
+    QAbstractItemModel* resultModel,
     int selectedRow
 )
 {
@@ -305,14 +306,12 @@ std::optional<RowEditorResult> show_row_editor_dialog(QWidget* parent, const Row
         edit->setAccessibleName(columnName);
         edit->setWhatsThis(QObject::tr("Value for column %1 (%2)").arg(columnName, dataType));
         if (request.result_model && request.selected_row >= 0) {
-            const auto* existingItem = lith_table::result_item_for_column(
-                request.result_model,
-                request.selected_row,
-                columnName
-            );
-            const bool existingIsNull = lith_table::item_is_null(existingItem);
-            if (!existingIsNull && existingItem) {
-                edit->setText(existingItem->text());
+            const int colIndex = lith_table::result_column_index_for_name(
+                request.result_model, columnName);
+            if (colIndex >= 0
+                && !lith_table::index_is_null(request.result_model, request.selected_row, colIndex)) {
+                edit->setText(lith_table::cell_text_at(
+                    request.result_model, request.selected_row, colIndex));
             }
         }
 
@@ -359,12 +358,11 @@ std::optional<RowEditorResult> show_row_editor_dialog(QWidget* parent, const Row
                 edit->setEnabled(!checked);
             });
             if (request.result_model && request.selected_row >= 0) {
-                const auto* existingItem = lith_table::result_item_for_column(
-                    request.result_model,
-                    request.selected_row,
-                    columnName
-                );
-                if (lith_table::item_is_null(existingItem)) {
+                const int colIndex = lith_table::result_column_index_for_name(
+                    request.result_model, columnName);
+                if (colIndex >= 0
+                    && lith_table::index_is_null(
+                        request.result_model, request.selected_row, colIndex)) {
                     nullCheck->setChecked(true);
                 }
             }

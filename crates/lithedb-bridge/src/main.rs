@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod daemon;
 mod payloads;
 mod support;
 
@@ -10,17 +11,28 @@ use cli::{parse_command, Command};
 use support::print_json;
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("{err}");
-            ExitCode::FAILURE
+    let args: Vec<String> = env::args().collect();
+
+    if args.iter().any(|a| a == "--daemon") {
+        match daemon::run_daemon() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err}");
+                ExitCode::FAILURE
+            }
+        }
+    } else {
+        match run_legacy(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err}");
+                ExitCode::FAILURE
+            }
         }
     }
 }
 
-fn run() -> Result<(), String> {
-    let args: Vec<String> = env::args().collect();
+fn run_legacy(args: Vec<String>) -> Result<(), String> {
     match parse_command(&args)? {
         Command::ListConnections => print_json(&commands::connections::list_connections()?),
         Command::TestConnection { payload } => {

@@ -5,6 +5,7 @@
 
 #include <optional>
 
+class QAbstractItemModel;
 class QStandardItemModel;
 class QWidget;
 
@@ -21,7 +22,7 @@ struct RowEditorRequest {
     QString driver;
     QString table_name;
     QStandardItemModel* structure_model = nullptr;
-    QStandardItemModel* result_model = nullptr;
+    QAbstractItemModel* result_model = nullptr;
     int selected_row = -1;
 };
 

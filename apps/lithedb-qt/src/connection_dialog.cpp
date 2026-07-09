@@ -1,5 +1,6 @@
 #include "connection_dialog.h"
 
+#include "bridge_client.h"
 #include "ui_helpers.h"
 
 #include <QCheckBox>
@@ -10,12 +11,12 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPointer>
-#include <QProcess>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -343,7 +344,6 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
         }
     });
 
-    QPointer<QProcess> pendingProcess;
     std::optional<ConnectionDialogResult> result;
 
     auto build_payload = [&]() -> std::optional<QJsonObject> {
@@ -394,30 +394,24 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
         return payload;
     };
 
-    auto run_process = [&](const QStringList& args, const QString& pendingText, auto onSuccess) {
-        if (pendingProcess) {
-            pendingProcess->kill();
-            pendingProcess->deleteLater();
-        }
-        auto* process = new QProcess(&dialog);
-        pendingProcess = process;
+    bool pendingCommand = false;
+
+    auto run_bridge_command = [&](const QString& command, const QJsonArray& args, const QString& pendingText, auto onSuccess) {
+        pendingCommand = true;
         statusLabel->setText(pendingText);
         buttons->setEnabled(false);
-        QObject::connect(process, &QProcess::finished, &dialog, [&, process, onSuccess](int exitCode, QProcess::ExitStatus exitStatus) {
-            const auto stdoutBytes = process->readAllStandardOutput();
-            const auto stderrBytes = process->readAllStandardError();
-            pendingProcess = nullptr;
-            buttons->setEnabled(true);
-            process->deleteLater();
-            if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-                statusLabel->setText(QString::fromLocal8Bit(stderrBytes).trimmed().isEmpty()
-                    ? "The command failed."
-                    : QString::fromLocal8Bit(stderrBytes).trimmed());
-                return;
+        BridgeClient::instance()->send_command(command, args,
+            [&, onSuccess](const QJsonObject& response) {
+                pendingCommand = false;
+                buttons->setEnabled(true);
+                if (response.contains("error")) {
+                    const auto err = response.value("error").toString();
+                    statusLabel->setText(err.isEmpty() ? "The command failed." : err);
+                    return;
+                }
+                onSuccess(response.value("data"));
             }
-            onSuccess(stdoutBytes);
-        });
-        process->start(bridgePath, args);
+        );
     };
 
     QObject::connect(testButton, &QPushButton::clicked, &dialog, [&]() {
@@ -426,10 +420,10 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
             return;
         }
         const auto payloadJson = QString::fromUtf8(QJsonDocument(*payload).toJson(QJsonDocument::Compact));
-        run_process(
-            {"test-connection", payloadJson},
+        run_bridge_command(
+            "test-connection", {payloadJson},
             "Testing connection...",
-            [&](const QByteArray&) { statusLabel->setText("Connection successful."); }
+            [&](const QJsonValue&) { statusLabel->setText("Connection successful."); }
         );
     });
 
@@ -440,10 +434,10 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
         }
         const auto savedPayload = *payload;
         const auto payloadJson = QString::fromUtf8(QJsonDocument(savedPayload).toJson(QJsonDocument::Compact));
-        run_process(
-            {"save-connection", payloadJson},
+        run_bridge_command(
+            "save-connection", {payloadJson},
             "Saving connection...",
-            [&, savedPayload](const QByteArray&) {
+            [&, savedPayload](const QJsonValue&) {
                 ConnectionDialogResult savedResult;
                 savedResult.payload = savedPayload;
                 savedResult.displayName = savedPayload.value("name").toString();
@@ -455,11 +449,6 @@ std::optional<ConnectionDialogResult> show_connection_dialog(
     });
 
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, [&]() {
-        if (pendingProcess) {
-            pendingProcess->kill();
-            pendingProcess->deleteLater();
-            pendingProcess = nullptr;
-        }
         dialog.reject();
     });
 

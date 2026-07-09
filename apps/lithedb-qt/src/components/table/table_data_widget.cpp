@@ -1,6 +1,7 @@
 #include "table_data_widget.h"
 
 #include "inline_edit_delegate.h"
+#include "../../models/result_table_model.h"
 #include "../../table_model_utils.h"
 #include "../../theme.h"
 #include "../../ui_helpers.h"
@@ -186,7 +187,7 @@ TableDataWidget::TableDataWidget(QWidget* parent)
     toolbarLayout->addLayout(toolbarSortRow);
     toolbarLayout->addLayout(toolbarActionsRow);
 
-    model_ = new QStandardItemModel(this);
+    model_ = new ResultTableModel(this);
     grid_ = new QTableView(this);
     grid_->setObjectName("tableDataGrid");
     grid_->setModel(model_);
@@ -289,8 +290,18 @@ TableDataWidget::TableDataWidget(QWidget* parent)
             emit inlineEditCancelRequested(editing_row_);
         }
     });
-    connect(model_, &QStandardItemModel::dataChanged, this, [this](const QModelIndex& topLeft, const QModelIndex& bottomRight) {
+    connect(model_, &QAbstractItemModel::dataChanged, this,
+        [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) {
         if (editing_row_ < 0) {
+            return;
+        }
+        // Only user-facing value edits should recompute dirty state. Metadata
+        // roles (dirty/tooltip/original) are written by mark_cell_dirty itself
+        // and must not re-enter or we stack-overflow.
+        const bool valueChanged = roles.isEmpty()
+            || roles.contains(Qt::DisplayRole)
+            || roles.contains(Qt::EditRole);
+        if (!valueChanged) {
             return;
         }
         for (int row = topLeft.row(); row <= bottomRight.row(); ++row) {
@@ -303,7 +314,9 @@ TableDataWidget::TableDataWidget(QWidget* parent)
         }
         update_save_cancel_visibility();
     });
-    connect(model_, &QStandardItemModel::modelAboutToBeReset, this, [this]() {
+    connect(model_, &QAbstractItemModel::modelAboutToBeReset, this, [this]() {
+        // Close editor synchronously before rows/headers disappear.
+        close_open_editor();
         if (editing_row_ >= 0) {
             editing_row_ = -1;
             if (delegate_) {
@@ -354,7 +367,7 @@ QToolButton* TableDataWidget::next_button() const { return next_button_; }
 QLineEdit* TableDataWidget::sort_column_input() const { return sort_column_input_; }
 QCheckBox* TableDataWidget::sort_direction_toggle() const { return sort_direction_toggle_; }
 QTableView* TableDataWidget::grid() const { return grid_; }
-QStandardItemModel* TableDataWidget::model() const { return model_; }
+ResultTableModel* TableDataWidget::model() const { return model_; }
 QLabel* TableDataWidget::status_label() const { return status_label_; }
 QProgressBar* TableDataWidget::spinner() const { return spinner_; }
 QStackedWidget* TableDataWidget::stack() const { return stack_; }
@@ -380,22 +393,57 @@ int TableDataWidget::editing_row() const
     return editing_row_;
 }
 
-void TableDataWidget::commit_current_editor()
+bool TableDataWidget::focus_is_cell_editor() const
 {
-    // Commit any open cell editor so its typed value is written into the model
-    // before save/cancel inspects the model. Without this the last keystrokes
-    // in a cell being edited would be lost when clicking Save.
-    //
-    // commitData/closeEditor are protected on QAbstractItemView, so we move
-    // focus back to the grid viewport: Qt commits the editor and writes the
-    // value into the model automatically when the editor loses focus.
+    if (!grid_) {
+        return false;
+    }
+    QWidget* focus = QApplication::focusWidget();
+    if (!focus) {
+        return false;
+    }
+    // Delegate editors are parented under the viewport (not the QTableView itself).
+    for (QWidget* w = focus; w; w = w->parentWidget()) {
+        if (w == grid_->viewport()) {
+            return focus != grid_->viewport();
+        }
+        if (w == grid_ || w == this) {
+            break;
+        }
+    }
+    return false;
+}
+
+void TableDataWidget::close_open_editor()
+{
     if (!grid_) {
         return;
     }
-    if (auto* editor = grid_->viewport()->focusWidget()) {
-        grid_->setFocus();
-    } else if (auto* focusWidget = QApplication::focusWidget()) {
-        focusWidget->clearFocus();
+    // Disable new editors first so a focus change cannot open another one.
+    grid_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    if (focus_is_cell_editor()) {
+        // Let QAbstractItemView commit/close its own editor exactly once.
+        // Never call clearFocus() on arbitrary widgets — that triggers
+        // "commitData/closeEditor called with an editor that does not belong".
+        grid_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void TableDataWidget::commit_current_editor()
+{
+    // Commit any open cell editor so its typed value is written into the model
+    // before save/cancel reads model state.
+    close_open_editor();
+}
+
+void TableDataWidget::prepare_for_model_reset()
+{
+    // Must close editors before beginResetModel / clear, otherwise Qt may call
+    // commitData/closeEditor on a stale editor and crash.
+    if (editing_row_ >= 0) {
+        exit_edit_mode(false);
+    } else {
+        close_open_editor();
     }
 }
 
@@ -423,16 +471,13 @@ void TableDataWidget::enter_edit_mode(int row)
     }
 
     editing_row_ = row;
+    model_->captureOriginals(row);
+    QVector<bool> columnEditable;
+    columnEditable.reserve(model_->columnCount());
     for (int column = 0; column < model_->columnCount(); ++column) {
-        auto* item = model_->item(row, column);
-        if (!item) {
-            continue;
-        }
-        item->setData(item->text(), lith_table::RoleCellOriginalValue);
-        item->setData(lith_table::item_is_null(item), lith_table::RoleCellOriginalIsNull);
-        item->setData(false, lith_table::RoleCellDirty);
-        item->setEditable(cell_is_editable(row, column));
+        columnEditable.append(cell_is_editable(row, column));
     }
+    model_->setRowEditable(row, true, columnEditable);
 
     if (delegate_) {
         delegate_->set_editing_row(row);
@@ -442,61 +487,67 @@ void TableDataWidget::enter_edit_mode(int row)
     grid_->setSelectionMode(QAbstractItemView::SingleSelection);
     if (grid_->selectionModel()) {
         grid_->selectionModel()->clearSelection();
+        // Focus the double-clicked cell when possible via current index.
+        if (grid_->currentIndex().isValid() && grid_->currentIndex().row() == row) {
+            grid_->selectionModel()->setCurrentIndex(
+                grid_->currentIndex(),
+                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Current);
+        }
     }
     grid_->resizeRowToContents(row);
-    update_dirty_tooltips(row);
+    // Viewport refresh for delegate highlight without another metadata write loop.
+    grid_->viewport()->update();
     update_save_cancel_visibility();
 }
 
 void TableDataWidget::exit_edit_mode(bool save)
 {
     if (editing_row_ < 0) {
+        close_open_editor();
         return;
     }
     const int row = editing_row_;
+
+    // Close the active editor while the row is still valid in the model.
+    close_open_editor();
+
     editing_row_ = -1;
-
-    if (!save) {
-        revert_row(row);
-    }
-
     if (delegate_) {
         delegate_->set_editing_row(-1);
     }
-    grid_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    grid_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    grid_->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
-    for (int column = 0; column < model_->columnCount(); ++column) {
-        auto* item = model_->item(row, column);
-        if (!item) {
-            continue;
+    if (model_ && row >= 0 && row < model_->rowCount()) {
+        if (!save) {
+            revert_row(row);
         }
-        item->setEditable(false);
-        item->setData(false, lith_table::RoleCellDirty);
-        item->setToolTip(QString());
+        model_->clearEditMetadata(row);
+        if (grid_) {
+            grid_->resizeRowToContents(row);
+        }
     }
-    grid_->resizeRowToContents(row);
+
+    if (grid_) {
+        grid_->setSelectionBehavior(QAbstractItemView::SelectRows);
+        grid_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        grid_->viewport()->update();
+    }
     update_save_cancel_visibility();
 }
 
 void TableDataWidget::mark_cell_dirty(const QModelIndex& index)
 {
-    if (editing_row_ < 0 || index.row() != editing_row_) {
+    if (editing_row_ < 0 || index.row() != editing_row_ || !model_) {
         return;
     }
-    auto* item = model_->item(index.row(), index.column());
-    if (!item) {
-        return;
-    }
-    const auto original = item->data(lith_table::RoleCellOriginalValue).toString();
-    const auto current = item->text();
-    item->setData(current != original, lith_table::RoleCellDirty);
-    if (current != original) {
-        item->setToolTip(tr("Original: %1").arg(original.isEmpty() ? "NULL" : original));
-    } else {
-        item->setToolTip(QString());
-    }
+    const auto original = model_->cellOriginalText(index.row(), index.column());
+    const auto current = model_->cellText(index.row(), index.column());
+    const bool dirty = current != original;
+    // setData no-ops when unchanged, avoiding dataChanged re-entrancy.
+    model_->setData(index, dirty, lith_table::RoleCellDirty);
+    model_->setData(
+        index,
+        dirty ? tr("Original: %1").arg(original.isEmpty() ? QStringLiteral("NULL") : original) : QString(),
+        Qt::ToolTipRole);
 }
 
 void TableDataWidget::revert_row(int row)
@@ -504,18 +555,7 @@ void TableDataWidget::revert_row(int row)
     if (!model_ || row < 0 || row >= model_->rowCount()) {
         return;
     }
-    for (int column = 0; column < model_->columnCount(); ++column) {
-        auto* item = model_->item(row, column);
-        if (!item) {
-            continue;
-        }
-        const auto original = item->data(lith_table::RoleCellOriginalValue).toString();
-        if (item->text() != original) {
-            item->setText(original);
-        }
-        item->setData(false, lith_table::RoleCellDirty);
-        item->setToolTip(QString());
-    }
+    model_->revertRow(row);
 }
 
 void TableDataWidget::update_dirty_tooltips(int row)
@@ -524,16 +564,14 @@ void TableDataWidget::update_dirty_tooltips(int row)
         return;
     }
     for (int column = 0; column < model_->columnCount(); ++column) {
-        auto* item = model_->item(row, column);
-        if (!item) {
-            continue;
-        }
-        const auto original = item->data(lith_table::RoleCellOriginalValue).toString();
-        const auto current = item->text();
-        if (item->data(lith_table::RoleCellDirty).toBool() && current != original) {
-            item->setToolTip(tr("Original: %1").arg(original.isEmpty() ? "NULL" : original));
+        const auto original = model_->cellOriginalText(row, column);
+        const auto current = model_->cellText(row, column);
+        if (model_->cellIsDirty(row, column) && current != original) {
+            model_->setData(model_->index(row, column),
+                tr("Original: %1").arg(original.isEmpty() ? "NULL" : original),
+                Qt::ToolTipRole);
         } else {
-            item->setToolTip(QString());
+            model_->setData(model_->index(row, column), QString(), Qt::ToolTipRole);
         }
     }
 }
@@ -546,8 +584,7 @@ void TableDataWidget::update_save_cancel_visibility()
     int dirtyCount = 0;
     if (editing && model_) {
         for (int column = 0; column < model_->columnCount(); ++column) {
-            auto* item = model_->item(editing_row_, column);
-            if (item && item->data(lith_table::RoleCellDirty).toBool()) {
+            if (model_->cellIsDirty(editing_row_, column)) {
                 ++dirtyCount;
             }
         }

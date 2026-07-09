@@ -4,10 +4,10 @@
 
 class QLabel;
 class QProgressBar;
-class QStandardItemModel;
 class QStackedWidget;
 class QTableView;
 class QToolButton;
+class ResultTableModel;
 
 class QueryResultWidget : public QWidget
 {
@@ -18,7 +18,7 @@ public:
 
     QStackedWidget* stack() const;
     QTableView* grid() const;
-    QStandardItemModel* model() const;
+    ResultTableModel* model() const;
     QLabel* status_label() const;
     QProgressBar* spinner() const;
 
@@ -32,7 +32,7 @@ signals:
 private:
     QStackedWidget* stack_ = nullptr;
     QTableView* grid_ = nullptr;
-    QStandardItemModel* model_ = nullptr;
+    ResultTableModel* model_ = nullptr;
     QLabel* status_label_ = nullptr;
     QProgressBar* spinner_ = nullptr;
 };

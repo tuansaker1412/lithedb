@@ -5,7 +5,6 @@
 class QLineEdit;
 class QLabel;
 class QPushButton;
-class QProcess;
 
 class CreateDatabaseDialog : public QDialog {
     Q_OBJECT

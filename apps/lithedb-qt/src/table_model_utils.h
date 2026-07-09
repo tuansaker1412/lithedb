@@ -7,12 +7,12 @@ class QJsonObject;
 class QJsonArray;
 class QJsonValue;
 class QByteArray;
-class QStandardItem;
+class QAbstractItemModel;
 class QStandardItemModel;
 
 namespace lith_table {
 
-// Cell roles stored on QStandardItem instances created by make_result_item.
+// Cell roles for ResultTableModel (and legacy item models).
 constexpr int RoleCellIsNull = Qt::UserRole + 11;
 // Inline-edit roles. RoleCellOriginalValue stores the pristine value captured
 // when entering inline edit mode, so a row can be reverted on cancel and the
@@ -22,13 +22,9 @@ constexpr int RoleCellOriginalIsNull = Qt::UserRole + 14;
 constexpr int RoleCellDirty = Qt::UserRole + 13;
 
 QString format_cell_display(const QJsonValue& cellValue);
-QStandardItem* make_result_item(const QJsonValue& cellValue);
-bool item_is_null(const QStandardItem* item);
-const QStandardItem* result_item_for_column(
-    const QStandardItemModel* model,
-    int row,
-    const QString& columnName
-);
+bool index_is_null(const QAbstractItemModel* model, int row, int column);
+QString cell_text_at(const QAbstractItemModel* model, int row, int column);
+int result_column_index_for_name(const QAbstractItemModel* model, const QString& columnName);
 std::optional<qulonglong> parse_rows_affected_payload(const QByteArray& output);
 QString escape_csv_field(const QString& field);
 
@@ -63,7 +59,7 @@ QString validation_error_for_value(
 // UPDATE/DELETE WHERE clauses. Reads current values from resultModel.
 QJsonArray build_row_keys_from_models(
     const QStandardItemModel* structureModel,
-    const QStandardItemModel* resultModel,
+    const QAbstractItemModel* resultModel,
     int selectedRow
 );
 

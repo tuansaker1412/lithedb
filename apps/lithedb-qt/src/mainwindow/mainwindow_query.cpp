@@ -6,6 +6,9 @@
 #include "../models/query_tab_state.h"
 #include "../table_model_utils.h"
 
+#include "../bridge_client.h"
+#include "../models/result_table_model.h"
+
 #include <QClipboard>
 #include <QComboBox>
 #include <QCryptographicHash>
@@ -18,7 +21,6 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPlainTextEdit>
-#include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QShortcut>
@@ -201,62 +203,48 @@ void MainWindow::execute_query_for_page(QWidget* page)
     resultPage->status_label()->setText("Loading...");
     data_stack_->setCurrentIndex(1);
 
-    auto* process = new QProcess(this);
-    connect(process, &QProcess::finished, this, [this, process, page, resultPage](int exitCode, QProcess::ExitStatus exitStatus) {
-        if (status_progress_) {
-            status_progress_->hide();
-        }
-        const auto out = process->readAllStandardOutput();
-        const auto err = process->readAllStandardError();
-        process->deleteLater();
-        auto* currentTab = query_tab_for_page(page);
-        if (currentTab) {
-            currentTab->run_button()->setEnabled(true);
-            currentTab->spinner()->hide();
-        }
-        resultPage->spinner()->hide();
-        if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-            QMessageBox::warning(this, "Query Failed", QString::fromLocal8Bit(err));
+    BridgeClient::instance()->send_command("execute-query", {connectionId, database, sql},
+        [this, page, resultPage](const QJsonObject& response) {
+            if (status_progress_) {
+                status_progress_->hide();
+            }
+            auto* currentTab = query_tab_for_page(page);
             if (currentTab) {
-                currentTab->status_label()->setText("Query failed");
+                currentTab->run_button()->setEnabled(true);
+                currentTab->spinner()->hide();
             }
-            resultPage->status_label()->setText("Query failed");
-            return;
-        }
-
-        const auto doc = QJsonDocument::fromJson(out);
-        if (!doc.isObject()) {
+            resultPage->spinner()->hide();
+            if (response.contains("error")) {
+                const auto err = response.value("error").toString();
+                QMessageBox::warning(this, "Query Failed", err.isEmpty() ? "Query failed" : err);
+                if (currentTab) {
+                    currentTab->status_label()->setText("Query failed");
+                }
+                resultPage->status_label()->setText("Query failed");
+                return;
+            }
+            const auto data = response.value("data").toObject();
+            auto* model = resultPage->model();
+            const auto columns = data.value("columns").toArray();
+            const auto rows = data.value("rows").toArray();
+            model->setFromQueryPayload(columns, rows, true);
+            const int totalRows = rows.size();
+            resultPage->stack()->setCurrentIndex(totalRows == 0 ? 1 : 2);
+            resultPage->status_label()->setText(QString("%1 rows").arg(totalRows));
+            data_stack_->setCurrentIndex(1);
+            status_label_->setText(QString("Query returned %1 rows").arg(totalRows));
             if (currentTab) {
-                currentTab->status_label()->setText("Invalid response");
+                currentTab->status_label()->setText(QString("%1 rows").arg(totalRows));
             }
-            resultPage->status_label()->setText("Invalid response");
-            return;
-        }
-
-        const auto object = doc.object();
-        auto* model = resultPage->model();
-        model->clear();
-        QStringList headers;
-        for (const auto& column : object.value("columns").toArray()) {
-            headers.append(column.toString());
-        }
-        model->setHorizontalHeaderLabels(headers);
-        for (const auto& rowValue : object.value("rows").toArray()) {
-            QList<QStandardItem*> rowItems;
-            for (const auto& cellValue : rowValue.toArray()) {
-                rowItems.append(lith_table::make_result_item(cellValue));
+            if (model->isProgressivelyLoading()) {
+                connect(model, &ResultTableModel::progressiveLoadFinished, resultPage,
+                    [resultPage, totalRows]() {
+                        resultPage->status_label()->setText(QString("%1 rows").arg(totalRows));
+                    },
+                    static_cast<Qt::ConnectionType>(Qt::SingleShotConnection));
             }
-            model->appendRow(rowItems);
         }
-        resultPage->stack()->setCurrentIndex(model->rowCount() == 0 ? 1 : 2);
-        resultPage->status_label()->setText(QString("%1 rows").arg(model->rowCount()));
-        data_stack_->setCurrentIndex(1);
-        status_label_->setText(QString("Query returned %1 rows").arg(model->rowCount()));
-        if (currentTab) {
-            currentTab->status_label()->setText(QString("%1 rows").arg(model->rowCount()));
-        }
-    });
-    process->start(bridge_binary_path(), QStringList{QStringLiteral("execute-query"), connectionId, database, sql});
+    );
 }
 
 void MainWindow::copy_query_result_cell(QueryResultWidget* widget)
@@ -279,7 +267,9 @@ void MainWindow::copy_query_result_row_json(QueryResultWidget* widget)
     const auto row = widget->grid()->selectionModel()->selectedRows().first().row();
     QJsonObject object;
     for (int column = 0; column < widget->model()->columnCount(); ++column) {
-        object.insert(widget->model()->headerData(column, Qt::Horizontal).toString(), widget->model()->item(row, column)->text());
+        object.insert(
+            widget->model()->headerData(column, Qt::Horizontal).toString(),
+            widget->model()->cellText(row, column));
     }
     QGuiApplication::clipboard()->setText(QJsonDocument(object).toJson(QJsonDocument::Compact));
     status_label_->setText("Row copied as JSON");
@@ -294,7 +284,7 @@ void MainWindow::copy_query_result_row_csv(QueryResultWidget* widget)
     const auto row = widget->grid()->selectionModel()->selectedRows().first().row();
     QStringList values;
     for (int column = 0; column < widget->model()->columnCount(); ++column) {
-        values.append(lith_table::escape_csv_field(widget->model()->item(row, column)->text()));
+        values.append(lith_table::escape_csv_field(widget->model()->cellText(row, column)));
     }
     QGuiApplication::clipboard()->setText(values.join(","));
     status_label_->setText("Row copied as CSV");
@@ -323,7 +313,7 @@ void MainWindow::export_query_result_csv(QueryResultWidget* widget)
     for (int row = 0; row < widget->model()->rowCount(); ++row) {
         QStringList values;
         for (int column = 0; column < widget->model()->columnCount(); ++column) {
-            values.append(lith_table::escape_csv_field(widget->model()->item(row, column)->text()));
+            values.append(lith_table::escape_csv_field(widget->model()->cellText(row, column)));
         }
         stream << values.join(",") << "\n";
     }

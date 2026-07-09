@@ -43,6 +43,8 @@ set(
 qt_add_executable(lithedb-qt
     WIN32
     MACOSX_BUNDLE
+    src/bridge_client.cpp
+    src/bridge_client.h
     src/bridge_utils.cpp
     src/bridge_utils.h
     src/components/query/query_editor_tab_widget.cpp
@@ -84,6 +86,8 @@ qt_add_executable(lithedb-qt
     src/mainwindow.h
     src/models/connection_tree_roles.h
     src/models/query_tab_state.h
+    src/models/result_table_model.cpp
+    src/models/result_table_model.h
     src/row_editor_dialog.cpp
     src/row_editor_dialog.h
     src/resources.qrc

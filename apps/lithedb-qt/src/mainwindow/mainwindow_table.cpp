@@ -8,7 +8,11 @@
 #include "../table_model_utils.h"
 #include "../ui_helpers.h"
 
+#include "../bridge_client.h"
+#include "../models/result_table_model.h"
+
 #include <QAbstractButton>
+#include <QAbstractItemModel>
 #include <QClipboard>
 #include <QCheckBox>
 #include <QDialog>
@@ -27,7 +31,6 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPlainTextEdit>
-#include <QProcess>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -201,6 +204,8 @@ void MainWindow::load_current_table_page()
         }
     }
     currentPage->set_current_page(current_table_page_);
+    // Prevent commitData/closeEditor on a dying editor when the model resets.
+    currentPage->data_widget()->prepare_for_model_reset();
 
     const auto sortColumn = currentPage->data_widget()->sort_column_input()->text().trimmed();
     const auto sortAsc = currentPage->data_widget()->sort_direction_toggle()->isChecked();
@@ -211,90 +216,84 @@ void MainWindow::load_current_table_page()
     if (status_progress_) {
         status_progress_->show();
     }
-    auto* tableProcess = new QProcess(this);
-    connect(tableProcess, &QProcess::finished, this, [this, tableProcess, currentPage](int exitCode, QProcess::ExitStatus exitStatus) {
-        const auto out = tableProcess->readAllStandardOutput();
-        const auto err = tableProcess->readAllStandardError();
-        tableProcess->deleteLater();
-        if (status_progress_) {
-            status_progress_->hide();
-        }
-        if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-            QMessageBox::warning(this, "Load Table Failed", QString::fromLocal8Bit(err));
-            status_label_->setText("Load failed");
-            set_table_page_loading(currentPage, false, "Load failed");
-            return;
-        }
-
-        const auto resultDoc = QJsonDocument::fromJson(out);
-        if (!resultDoc.isObject()) {
-            set_table_page_loading(currentPage, false, "Invalid table payload");
-            return;
-        }
-
-        const auto resultObject = resultDoc.object();
-        auto* resultModel = currentPage->data_widget()->model();
-        resultModel->clear();
-        QStringList headers;
-        for (const auto& column : resultObject.value("columns").toArray()) {
-            headers.append(column.toString());
-        }
-        resultModel->setHorizontalHeaderLabels(headers);
-        for (const auto& rowValue : resultObject.value("rows").toArray()) {
-            QList<QStandardItem*> rowItems;
-            for (const auto& cellValue : rowValue.toArray()) {
-                rowItems.append(lith_table::make_result_item(cellValue));
+    QJsonArray fetchArgs;
+    fetchArgs.append(current_connection_id_);
+    fetchArgs.append(current_database_);
+    fetchArgs.append(current_table_);
+    fetchArgs.append(QString::number(current_table_page_));
+    fetchArgs.append(QString::number(current_table_page_size_));
+    fetchArgs.append(sortColumn);
+    fetchArgs.append(sortAsc ? "true" : "false");
+    BridgeClient::instance()->send_command("fetch-table", fetchArgs,
+        [this, currentPage](const QJsonObject& response) {
+            if (status_progress_) {
+                status_progress_->hide();
             }
-            resultModel->appendRow(rowItems);
-        }
-        currentPage->data_widget()->stack()->setCurrentIndex(resultModel->rowCount() == 0 ? 1 : 2);
-        currentPage->data_widget()->status_label()->setText(
-            QString("Page %1, %2 rows").arg(current_table_page_ + 1).arg(resultModel->rowCount())
-        );
-        currentPage->data_widget()->prev_button()->setEnabled(current_table_page_ > 0);
-        currentPage->data_widget()->next_button()->setEnabled(resultModel->rowCount() >= static_cast<int>(current_table_page_size_));
-
-        auto* structureProcess = new QProcess(this);
-        connect(structureProcess, &QProcess::finished, this, [this, structureProcess, currentPage](int structureExitCode, QProcess::ExitStatus structureExitStatus) {
-            const auto structureOut = structureProcess->readAllStandardOutput();
-            const auto structureErr = structureProcess->readAllStandardError();
-            structureProcess->deleteLater();
-            if (structureExitStatus == QProcess::NormalExit && structureExitCode == 0) {
-                const auto structureDoc = QJsonDocument::fromJson(structureOut);
-                if (structureDoc.isObject()) {
-                    populate_structure_page(currentPage, structureDoc.object());
-                }
-            } else {
-                currentPage->structure_widget()->status_label()->setText("Structure load failed");
-                QMessageBox::warning(this, "Load Structure Failed", QString::fromLocal8Bit(structureErr));
+            if (response.contains("error")) {
+                const auto err = response.value("error").toString();
+                QMessageBox::warning(this, "Load Table Failed", err);
+                status_label_->setText("Load failed");
+                set_table_page_loading(currentPage, false, "Load failed");
+                return;
             }
-
-            set_table_page_loading(currentPage, false, QString("Page %1 ready").arg(current_table_page_ + 1));
-            data_stack_->setCurrentIndex(1);
-            const auto tabIndex = data_tabs_->indexOf(currentPage);
-            if (tabIndex >= 0) {
-                data_tabs_->setTabText(tabIndex, current_table_);
-            }
-            status_label_->setText(
-                QString("Loaded %1 page %2").arg(current_table_).arg(current_table_page_ + 1)
+            const auto resultObject = response.value("data").toObject();
+            auto* resultModel = currentPage->data_widget()->model();
+            const auto columns = resultObject.value("columns").toArray();
+            const auto rows = resultObject.value("rows").toArray();
+            // Again before applying payload — user may have started editing while loading.
+            currentPage->data_widget()->prepare_for_model_reset();
+            // Progressive fill: first ~25 rows paint immediately, rest in batches.
+            resultModel->setFromQueryPayload(columns, rows, true);
+            const int totalInPage = rows.size();
+            currentPage->data_widget()->stack()->setCurrentIndex(totalInPage == 0 ? 1 : 2);
+            currentPage->data_widget()->status_label()->setText(
+                QString("Page %1, %2 rows").arg(current_table_page_ + 1).arg(totalInPage)
             );
-        });
-        structureProcess->start(
-            bridge_binary_path(),
-            QStringList{QStringLiteral("table-structure"), current_connection_id_, current_database_, current_table_}
-        );
-    });
-    tableProcess->start(
-        bridge_binary_path(),
-        QStringList{
-            QStringLiteral("fetch-table"),
-            current_connection_id_,
-            current_database_,
-            current_table_,
-            QString::number(current_table_page_),
-            QString::number(current_table_page_size_),
-            sortColumn,
-            sortAsc ? "true" : "false",
+            currentPage->data_widget()->prev_button()->setEnabled(current_table_page_ > 0);
+            currentPage->data_widget()->next_button()->setEnabled(totalInPage >= static_cast<int>(current_table_page_size_));
+
+            // Show grid as soon as first progressive batch is in; structure loads in parallel.
+            set_table_page_loading(currentPage, false,
+                totalInPage == 0
+                    ? QString("Page %1 empty").arg(current_table_page_ + 1)
+                    : QString("Page %1 — showing rows...").arg(current_table_page_ + 1));
+            data_stack_->setCurrentIndex(1);
+
+            BridgeClient::instance()->send_command("table-structure",
+                {current_connection_id_, current_database_, current_table_},
+                [this, currentPage, totalInPage](const QJsonObject& structResponse) {
+                    if (!structResponse.contains("error")) {
+                        populate_structure_page(currentPage, structResponse.value("data").toObject());
+                    } else {
+                        currentPage->structure_widget()->status_label()->setText("Structure load failed");
+                        const auto err = structResponse.value("error").toString();
+                        QMessageBox::warning(this, "Load Structure Failed", err);
+                    }
+                    const auto tabIndex = data_tabs_->indexOf(currentPage);
+                    if (tabIndex >= 0) {
+                        data_tabs_->setTabText(tabIndex, current_table_);
+                    }
+                    auto* model = currentPage->data_widget()->model();
+                    const auto finishStatus = QString("Loaded %1 page %2 (%3 rows)")
+                        .arg(current_table_)
+                        .arg(current_table_page_ + 1)
+                        .arg(totalInPage);
+                    if (model && model->isProgressivelyLoading()) {
+                        connect(model, &ResultTableModel::progressiveLoadFinished, this,
+                            [this, currentPage, finishStatus]() {
+                                currentPage->data_widget()->status_label()->setText(
+                                    QString("Page %1 ready").arg(current_table_page_ + 1));
+                                status_label_->setText(finishStatus);
+                            },
+                            static_cast<Qt::ConnectionType>(Qt::SingleShotConnection));
+                        status_label_->setText(QString("Loading remaining rows for %1...").arg(current_table_));
+                    } else {
+                        currentPage->data_widget()->status_label()->setText(
+                            QString("Page %1 ready").arg(current_table_page_ + 1));
+                        status_label_->setText(finishStatus);
+                    }
+                }
+            );
         }
     );
 }
@@ -383,7 +382,7 @@ void MainWindow::copy_selected_cell()
 
 void MainWindow::open_cell_value_dialog(
     QTableView* grid,
-    QStandardItemModel* model,
+    QAbstractItemModel* model,
     const QModelIndex& index,
     bool allow_row_edit
 )
@@ -402,8 +401,7 @@ void MainWindow::open_cell_value_dialog(
 
     const auto columnName = model->headerData(index.column(), Qt::Horizontal).toString();
     const auto rawValue = index.data().toString();
-    const auto* currentItem = model->itemFromIndex(index);
-    const bool isNullValue = lith_table::item_is_null(currentItem);
+    const bool isNullValue = lith_table::index_is_null(model, index.row(), index.column());
     QString dataType;
     auto* tablePage = current_table_page();
     auto* structureModel = tablePage ? tablePage->structure_widget()->structure_model() : nullptr;
@@ -521,7 +519,7 @@ void MainWindow::copy_selected_row_json()
     for (int column = 0; column < resultModel->columnCount(); ++column) {
         object.insert(
             resultModel->headerData(column, Qt::Horizontal).toString(),
-            resultModel->item(row, column)->text()
+            resultModel->cellText(row, column)
         );
     }
     QGuiApplication::clipboard()->setText(QJsonDocument(object).toJson(QJsonDocument::Compact));
@@ -540,7 +538,7 @@ void MainWindow::copy_selected_row_csv()
     const auto row = resultGrid->selectionModel()->selectedRows().first().row();
     QStringList values;
     for (int column = 0; column < resultModel->columnCount(); ++column) {
-        values.append(lith_table::escape_csv_field(resultModel->item(row, column)->text()));
+        values.append(lith_table::escape_csv_field(resultModel->cellText(row, column)));
     }
     QGuiApplication::clipboard()->setText(values.join(","));
     status_label_->setText("Row copied as CSV");
@@ -571,7 +569,7 @@ void MainWindow::export_current_table_csv()
     for (int row = 0; row < resultModel->rowCount(); ++row) {
         QStringList values;
         for (int column = 0; column < resultModel->columnCount(); ++column) {
-            values.append(lith_table::escape_csv_field(resultModel->item(row, column)->text()));
+            values.append(lith_table::escape_csv_field(resultModel->cellText(row, column)));
         }
         stream << values.join(",") << "\n";
     }
@@ -591,74 +589,53 @@ void MainWindow::run_write_command_async(
     if (status_progress_) {
         status_progress_->show();
     }
-    auto* process = new QProcess(this);
-    connect(process, &QProcess::finished, this, [this, process, successStatus, successTitle, errorTitle, silent](int exitCode, QProcess::ExitStatus exitStatus) {
-        if (status_progress_) {
-            status_progress_->hide();
-        }
-        const auto out = process->readAllStandardOutput();
-        const auto err = process->readAllStandardError();
-        process->deleteLater();
-        if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-            const auto errorText = QString::fromLocal8Bit(err).trimmed().isEmpty()
-                ? QString::fromLocal8Bit(out).trimmed()
-                : QString::fromLocal8Bit(err).trimmed();
-            status_label_->setText(errorTitle);
-            QMessageBox::warning(
-                this,
-                errorTitle,
-                errorText.isEmpty() ? "The database operation failed without a detailed error." : errorText
-            );
-            return;
-        }
+    const QString command = args.first();
+    QJsonArray jsonArgs;
+    for (int i = 1; i < args.size(); ++i) {
+        jsonArgs.append(args.at(i));
+    }
+    BridgeClient::instance()->send_command(command, jsonArgs,
+        [this, successStatus, successTitle, errorTitle, silent](const QJsonObject& response) {
+            if (status_progress_) {
+                status_progress_->hide();
+            }
+            if (response.contains("error")) {
+                const auto err = response.value("error").toString();
+                status_label_->setText(errorTitle);
+                QMessageBox::warning(this, errorTitle,
+                    err.isEmpty() ? "The database operation failed without a detailed error." : err);
+                return;
+            }
 
-        const auto rowsAffected = lith_table::parse_rows_affected_payload(out);
-        if (!rowsAffected.has_value()) {
+            const auto data = response.value("data");
+            const auto rowsAffected = data.isDouble() ? static_cast<int>(data.toDouble())
+                : data.isString() ? data.toString().toInt() : -1;
+
             reload_current_table();
-            status_label_->setText(QString("%1 (database reloaded)").arg(successStatus));
-            if (!silent) {
-                QMessageBox::information(
-                    this,
-                    successTitle,
-                    QString(
-                        "%1, but the bridge returned an unexpected success payload.\n\nRaw output:\n%2"
-                    )
-                        .arg(successStatus, QString::fromUtf8(out).trimmed())
-                );
-            }
-            return;
-        }
 
-        reload_current_table();
-        if (*rowsAffected == 0) {
-            status_label_->setText(QString("%1 (0 rows affected)").arg(successStatus));
-            if (!silent) {
-                QMessageBox::information(
-                    this,
-                    successTitle,
-                    QString(
-                        "%1, but the database reported 0 affected rows.\n"
-                        "The selected row may no longer match, or the submitted values may already be identical."
-                    )
-                        .arg(successStatus)
-                );
+            if (rowsAffected < 0) {
+                status_label_->setText(QString("%1 (database reloaded)").arg(successStatus));
+                return;
             }
-            return;
+            if (rowsAffected == 0) {
+                status_label_->setText(QString("%1 (0 rows affected)").arg(successStatus));
+                if (!silent) {
+                    QMessageBox::information(this, successTitle,
+                        QString("%1, but the database reported 0 affected rows.\n"
+                                "The selected row may no longer match, or the submitted values may already be identical.")
+                            .arg(successStatus));
+                }
+                return;
+            }
+            const auto rowLabel = rowsAffected == 1 ? "row" : "rows";
+            status_label_->setText(
+                QString("%1 (%2 %3 affected)").arg(successStatus).arg(rowsAffected).arg(rowLabel));
+            if (!silent) {
+                QMessageBox::information(this, successTitle,
+                    QString("%1\n\nRows affected: %2").arg(successStatus).arg(rowsAffected));
+            }
         }
-
-        const auto rowLabel = *rowsAffected == 1 ? "row" : "rows";
-        status_label_->setText(
-            QString("%1 (%2 %3 affected)").arg(successStatus).arg(*rowsAffected).arg(rowLabel)
-        );
-        if (!silent) {
-            QMessageBox::information(
-                this,
-                successTitle,
-                QString("%1\n\nRows affected: %2").arg(successStatus).arg(*rowsAffected)
-            );
-        }
-    });
-    process->start(bridge_binary_path(), args);
+    );
 }
 
 void MainWindow::insert_current_row()
@@ -668,6 +645,9 @@ void MainWindow::insert_current_row()
         return;
     }
     auto* tablePage = current_table_page();
+    if (tablePage) {
+        tablePage->data_widget()->prepare_for_model_reset();
+    }
     auto* structureModel = tablePage ? tablePage->structure_widget()->structure_model() : nullptr;
     const auto result = lith_dialogs::show_row_editor_dialog(
         this,
@@ -699,11 +679,26 @@ void MainWindow::edit_current_row()
     auto* resultGrid = tablePage ? tablePage->data_widget()->grid() : nullptr;
     auto* resultModel = tablePage ? tablePage->data_widget()->model() : nullptr;
     auto* structureModel = tablePage ? tablePage->structure_widget()->structure_model() : nullptr;
-    if (!resultGrid || !resultGrid->selectionModel() || !resultGrid->selectionModel()->hasSelection()) {
+    if (!resultGrid || !resultModel) {
         status_label_->setText("No row selected");
         return;
     }
-    const auto selectedRow = resultGrid->selectionModel()->selectedRows().first().row();
+    int selectedRow = -1;
+    if (auto* sm = resultGrid->selectionModel()) {
+        if (!sm->selectedRows().isEmpty()) {
+            selectedRow = sm->selectedRows().first().row();
+        } else if (!sm->selectedIndexes().isEmpty()) {
+            selectedRow = sm->selectedIndexes().first().row();
+        }
+    }
+    if (selectedRow < 0 && resultGrid->currentIndex().isValid()) {
+        selectedRow = resultGrid->currentIndex().row();
+    }
+    if (selectedRow < 0) {
+        status_label_->setText("No row selected");
+        return;
+    }
+    tablePage->data_widget()->prepare_for_model_reset();
     const auto result = lith_dialogs::show_row_editor_dialog(
         this,
         {
@@ -735,11 +730,26 @@ void MainWindow::duplicate_current_row()
     auto* resultGrid = tablePage ? tablePage->data_widget()->grid() : nullptr;
     auto* resultModel = tablePage ? tablePage->data_widget()->model() : nullptr;
     auto* structureModel = tablePage ? tablePage->structure_widget()->structure_model() : nullptr;
-    if (!resultGrid || !resultGrid->selectionModel() || !resultGrid->selectionModel()->hasSelection()) {
+    if (!resultGrid || !resultModel) {
         status_label_->setText("No row selected");
         return;
     }
-    const auto selectedRow = resultGrid->selectionModel()->selectedRows().first().row();
+    int selectedRow = -1;
+    if (auto* sm = resultGrid->selectionModel()) {
+        if (!sm->selectedRows().isEmpty()) {
+            selectedRow = sm->selectedRows().first().row();
+        } else if (!sm->selectedIndexes().isEmpty()) {
+            selectedRow = sm->selectedIndexes().first().row();
+        }
+    }
+    if (selectedRow < 0 && resultGrid->currentIndex().isValid()) {
+        selectedRow = resultGrid->currentIndex().row();
+    }
+    if (selectedRow < 0) {
+        status_label_->setText("No row selected");
+        return;
+    }
+    tablePage->data_widget()->commit_current_editor();
     const auto result = lith_dialogs::show_row_editor_dialog(
         this,
         {
@@ -770,16 +780,39 @@ void MainWindow::delete_current_row()
     auto* resultGrid = tablePage ? tablePage->data_widget()->grid() : nullptr;
     auto* resultModel = tablePage ? tablePage->data_widget()->model() : nullptr;
     auto* structureModel = tablePage ? tablePage->structure_widget()->structure_model() : nullptr;
-    if (!resultGrid || !resultGrid->selectionModel() || !resultGrid->selectionModel()->hasSelection()) {
+    if (!resultGrid || !resultModel) {
+        status_label_->setText("No table selected");
+        return;
+    }
+
+    // Resolve row under SelectRows or SelectItems (inline-edit) selection modes.
+    int selectedRow = -1;
+    if (auto* sm = resultGrid->selectionModel()) {
+        const auto rows = sm->selectedRows();
+        if (!rows.isEmpty()) {
+            selectedRow = rows.first().row();
+        } else if (!sm->selectedIndexes().isEmpty()) {
+            selectedRow = sm->selectedIndexes().first().row();
+        }
+    }
+    if (selectedRow < 0 && resultGrid->currentIndex().isValid()) {
+        selectedRow = resultGrid->currentIndex().row();
+    }
+    if (selectedRow < 0 || selectedRow >= resultModel->rowCount()) {
         status_label_->setText("No row selected");
         return;
     }
-    const auto selectedRow = resultGrid->selectionModel()->selectedRows().first().row();
+
+    // Build keys before closing editors / leaving edit mode (model still intact).
     QJsonArray keys = lith_table::build_row_keys_from_models(structureModel, resultModel, selectedRow);
     if (keys.isEmpty()) {
         QMessageBox::warning(this, "Delete Failed", "Could not identify the selected row.");
         return;
     }
+
+    // Close cell editor + exit inline edit before modal dialog / async reload.
+    tablePage->data_widget()->prepare_for_model_reset();
+
     if (QMessageBox::question(this, "Delete Row", "Delete selected row?") != QMessageBox::Yes) {
         return;
     }
@@ -823,14 +856,13 @@ void MainWindow::commit_inline_edit(TablePageWidget* tablePage, int row)
         if (!lith_table::column_is_inline_editable(structureModel, column, tablePage->driver())) {
             continue;
         }
-        auto* item = resultModel->item(row, column);
-        if (!item || !item->data(lith_table::RoleCellDirty).toBool()) {
+        if (!resultModel->cellIsDirty(row, column)) {
             continue;
         }
         const auto columnName = lith_table::structure_column_name(structureModel, column);
         const auto dataType = lith_table::structure_column_data_type(structureModel, column);
         const bool nullable = lith_table::structure_column_is_nullable(structureModel, column);
-        const auto text = item->text();
+        const auto text = resultModel->cellText(row, column);
         const bool isNull = (text.trimmed().isEmpty() && nullable)
             || text.trimmed().compare("NULL", Qt::CaseInsensitive) == 0;
         const auto value = isNull ? QString() : text;
@@ -857,9 +889,8 @@ void MainWindow::commit_inline_edit(TablePageWidget* tablePage, int row)
         for (int column = 0; column < structureModel->rowCount(); ++column) {
             const auto columnName = lith_table::structure_column_name(structureModel, column);
             const auto dataType = lith_table::structure_column_data_type(structureModel, column);
-            auto* item = resultModel->item(row, column);
-            const auto original = item ? item->data(lith_table::RoleCellOriginalValue).toString() : QString();
-            const bool originalNull = item ? item->data(lith_table::RoleCellOriginalIsNull).toBool() : false;
+            const auto original = resultModel->cellOriginalText(row, column);
+            const bool originalNull = resultModel->cellOriginalIsNull(row, column);
             auto cell = lith_table::build_cell_json(columnName, dataType, original, originalNull);
             fallbackKeys.append(cell);
             if (lith_table::structure_column_is_primary_key(structureModel, column)) {
