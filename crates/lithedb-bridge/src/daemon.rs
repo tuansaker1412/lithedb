@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use std::sync::OnceLock;
 
 use lithedb_core::config::connection::{ConnectionStore, DriverType};
 use lithedb_core::db::driver::CellValue;
@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::payloads::{
-    ConnectionInput, ConnectionSummary, QueryResultPayload, SchemaDatabase,
-    ColumnInfoPayload, ForeignKeyPayload, IndexPayload, StructurePayload,
+    ColumnInfoPayload, ConnectionInput, ConnectionSummary, ForeignKeyPayload, IndexPayload,
+    QueryResultPayload, SchemaDatabase, StructurePayload,
 };
 use crate::support::{connection_config_from_input, resolve_password};
 
@@ -40,10 +40,20 @@ struct DaemonResponse {
 
 impl DaemonResponse {
     fn success(id: String, data: Value) -> Self {
-        Self { id, ok: Some(true), data: Some(data), error: None }
+        Self {
+            id,
+            ok: Some(true),
+            data: Some(data),
+            error: None,
+        }
     }
     fn error(id: String, error: String) -> Self {
-        Self { id, ok: None, data: None, error: Some(error) }
+        Self {
+            id,
+            ok: None,
+            data: None,
+            error: Some(error),
+        }
     }
 }
 
@@ -70,7 +80,9 @@ struct ConnectionPool {
 
 impl ConnectionPool {
     fn new() -> Self {
-        Self { entries: HashMap::new() }
+        Self {
+            entries: HashMap::new(),
+        }
     }
 
     fn evict_idle(&mut self) {
@@ -113,7 +125,9 @@ impl ConnectionPool {
             .find(|c| c.id == connection_id)
             .cloned()
             .ok_or_else(|| format!("connection not found: {connection_id}"))?;
-        let password = store.load_password(connection_id).map_err(|e| e.to_string())?;
+        let password = store
+            .load_password(connection_id)
+            .map_err(|e| e.to_string())?;
         let state = AppState::new(connections);
         runtime().block_on(async { state.connect(&config, &password).await })?;
         self.entries.insert(
@@ -217,7 +231,8 @@ fn arg_str(args: &[Value], index: usize) -> Result<&str, String> {
 fn arg_u64(args: &[Value], index: usize, default: u64) -> Result<u64, String> {
     match args.get(index) {
         Some(v) if v.is_null() => Ok(default),
-        Some(v) => v.as_u64()
+        Some(v) => v
+            .as_u64()
             .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
             .ok_or_else(|| format!("invalid u64 at position {index}")),
         None => Ok(default),
@@ -241,18 +256,28 @@ fn query_result_payload(result: lithedb_core::db::driver::QueryResult) -> Value 
 
 fn parse_cell_values(json: &str) -> Result<Vec<CellValue>, String> {
     let raw: Value = serde_json::from_str(json).map_err(|err| err.to_string())?;
-    let array = raw.as_array()
+    let array = raw
+        .as_array()
         .ok_or_else(|| "cell payload must be an array".to_string())?;
     let mut cells = Vec::with_capacity(array.len());
     for value in array {
-        let object = value.as_object()
+        let object = value
+            .as_object()
             .ok_or_else(|| "cell payload entries must be objects".to_string())?;
-        let column = object.get("column").and_then(|v| v.as_str())
+        let column = object
+            .get("column")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "cell payload missing column".to_string())?;
-        let data_type = object.get("data_type").and_then(|v| v.as_str())
+        let data_type = object
+            .get("data_type")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "cell payload missing data_type".to_string())?;
         let val = object.get("value").and_then(|v| {
-            if v.is_null() { None } else { v.as_str().map(ToOwned::to_owned) }
+            if v.is_null() {
+                None
+            } else {
+                v.as_str().map(ToOwned::to_owned)
+            }
         });
         cells.push(CellValue {
             column: column.to_string(),
@@ -265,7 +290,11 @@ fn parse_cell_values(json: &str) -> Result<Vec<CellValue>, String> {
 
 fn parse_sort_order(args: &[Value]) -> Option<(String, bool)> {
     // Daemon args are 0-based JSON array: [cid, db, table, page, page_size, sort_col, sort_asc]
-    let col = args.get(5).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let col = args
+        .get(5)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     if col.trim().is_empty() {
         return None;
     }
@@ -283,13 +312,19 @@ fn parse_sort_order(args: &[Value]) -> Option<(String, bool)> {
 fn handle_list_connections() -> Result<Value, String> {
     let store = ConnectionStore::new().map_err(|e| e.to_string())?;
     let connections = store.load().map_err(|e| e.to_string())?;
-    let summaries: Vec<ConnectionSummary> = connections.into_iter().map(|c| {
-        ConnectionSummary {
-            id: c.id, name: c.name, driver: format!("{:?}", c.driver),
-            host: c.host, port: c.port, username: c.username,
-            database: c.database, ssl: c.ssl,
-        }
-    }).collect();
+    let summaries: Vec<ConnectionSummary> = connections
+        .into_iter()
+        .map(|c| ConnectionSummary {
+            id: c.id,
+            name: c.name,
+            driver: format!("{:?}", c.driver),
+            host: c.host,
+            port: c.port,
+            username: c.username,
+            database: c.database,
+            ssl: c.ssl,
+        })
+        .collect();
     to_value(&summaries)
 }
 
@@ -306,30 +341,41 @@ fn handle_save_connection(payload_str: &str) -> Result<Value, String> {
     let store = ConnectionStore::new().map_err(|e| e.to_string())?;
     let mut connections = store.load().map_err(|e| e.to_string())?;
     let config = connection_config_from_input(&input);
-    if let Some(index) = connections.iter().position(|existing| existing.id == config.id) {
+    if let Some(index) = connections
+        .iter()
+        .position(|existing| existing.id == config.id)
+    {
         connections[index] = config.clone();
     } else {
         connections.push(config.clone());
     }
     store.save(&connections).map_err(|e| e.to_string())?;
     if input.save_password.unwrap_or(false) {
-        store.save_password(&config.id, input.password.as_deref().unwrap_or_default())
+        store
+            .save_password(&config.id, input.password.as_deref().unwrap_or_default())
             .map_err(|e| e.to_string())?;
     }
     let summary = ConnectionSummary {
-        id: config.id, name: config.name,
+        id: config.id,
+        name: config.name,
         driver: match config.driver {
             DriverType::PostgreSQL => "PostgreSQL".to_string(),
             DriverType::MySQL => "MySQL".to_string(),
             DriverType::SQLite => "SQLite".to_string(),
         },
-        host: config.host, port: config.port, username: config.username,
-        database: config.database, ssl: config.ssl,
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        database: config.database,
+        ssl: config.ssl,
     };
     to_value(&summary)
 }
 
-fn handle_delete_connection(pool: &mut ConnectionPool, connection_id: &str) -> Result<Value, String> {
+fn handle_delete_connection(
+    pool: &mut ConnectionPool,
+    connection_id: &str,
+) -> Result<Value, String> {
     let _ = pool.disconnect(connection_id);
     let store = ConnectionStore::new().map_err(|e| e.to_string())?;
     let mut connections = store.load().map_err(|e| e.to_string())?;
@@ -339,7 +385,9 @@ fn handle_delete_connection(pool: &mut ConnectionPool, connection_id: &str) -> R
         return Err("connection not found".to_string());
     }
     store.save(&connections).map_err(|e| e.to_string())?;
-    store.delete_password(connection_id).map_err(|e| e.to_string())?;
+    store
+        .delete_password(connection_id)
+        .map_err(|e| e.to_string())?;
     Ok(Value::Bool(true))
 }
 
@@ -378,8 +426,11 @@ fn handle_connect(
         let connect_config = config;
         let connect_password = password;
         thread::spawn(move || {
-            let result =
-                runtime().block_on(async { connect_state.connect(&connect_config, &connect_password).await });
+            let result = runtime().block_on(async {
+                connect_state
+                    .connect(&connect_config, &connect_password)
+                    .await
+            });
             let _ = tx.send(result);
         });
     }
@@ -448,17 +499,24 @@ fn handle_list_schema(pool: &mut ConnectionPool, cid: &str) -> Result<Value, Str
     let state = pool.get_or_connect(cid)?;
     let store = ConnectionStore::new().map_err(|e| e.to_string())?;
     let connections = store.load().map_err(|e| e.to_string())?;
-    let config = connections.iter().find(|c| c.id == cid).cloned()
+    let config = connections
+        .iter()
+        .find(|c| c.id == cid)
+        .cloned()
         .ok_or_else(|| format!("connection not found: {cid}"))?;
     let databases = runtime().block_on(async { state.list_schema().await })?;
     if matches!(config.driver, DriverType::SQLite) {
-        let out: Vec<SchemaDatabase> = databases.into_iter()
-            .map(|(database, tables)| SchemaDatabase { database, tables }).collect();
+        let out: Vec<SchemaDatabase> = databases
+            .into_iter()
+            .map(|(database, tables)| SchemaDatabase { database, tables })
+            .collect();
         return to_value(&out);
     }
     if databases.len() == 1 && !databases[0].1.is_empty() {
-        let out: Vec<SchemaDatabase> = databases.into_iter()
-            .map(|(database, tables)| SchemaDatabase { database, tables }).collect();
+        let out: Vec<SchemaDatabase> = databases
+            .into_iter()
+            .map(|(database, tables)| SchemaDatabase { database, tables })
+            .collect();
         return to_value(&out);
     }
     let mut out = Vec::new();
@@ -494,7 +552,9 @@ fn handle_fetch_table(pool: &mut ConnectionPool, args: &[Value]) -> Result<Value
         let _ = runtime().block_on(async { state.use_database(database).await });
     }
     let result = runtime().block_on(async {
-        state.load_table_data(database, table, page, page_size, order_by).await
+        state
+            .load_table_data(database, table, page, page_size, order_by)
+            .await
     })?;
     Ok(query_result_payload(result))
 }
@@ -511,17 +571,34 @@ fn handle_table_structure(pool: &mut ConnectionPool, args: &[Value]) -> Result<V
     let fks = runtime().block_on(async { state.list_foreign_keys(database, table).await })?;
     let idxs = runtime().block_on(async { state.list_indexes(database, table).await })?;
     let payload = StructurePayload {
-        columns: columns.into_iter().map(|c| ColumnInfoPayload {
-            name: c.name, data_type: c.data_type, nullable: c.nullable,
-            is_primary_key: c.is_primary_key, auto_increment: c.auto_increment,
-        }).collect(),
-        foreign_keys: fks.into_iter().map(|fk| ForeignKeyPayload {
-            name: fk.name, column: fk.column,
-            referenced_table: fk.referenced_table, referenced_column: fk.referenced_column,
-        }).collect(),
-        indexes: idxs.into_iter().map(|i| IndexPayload {
-            name: i.name, columns: i.columns, unique: i.unique, primary: i.primary,
-        }).collect(),
+        columns: columns
+            .into_iter()
+            .map(|c| ColumnInfoPayload {
+                name: c.name,
+                data_type: c.data_type,
+                nullable: c.nullable,
+                is_primary_key: c.is_primary_key,
+                auto_increment: c.auto_increment,
+            })
+            .collect(),
+        foreign_keys: fks
+            .into_iter()
+            .map(|fk| ForeignKeyPayload {
+                name: fk.name,
+                column: fk.column,
+                referenced_table: fk.referenced_table,
+                referenced_column: fk.referenced_column,
+            })
+            .collect(),
+        indexes: idxs
+            .into_iter()
+            .map(|i| IndexPayload {
+                name: i.name,
+                columns: i.columns,
+                unique: i.unique,
+                primary: i.primary,
+            })
+            .collect(),
     };
     to_value(&payload)
 }
